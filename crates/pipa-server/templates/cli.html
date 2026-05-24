@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>approve device — pages</title>
+    <style>
+      :root { color-scheme: light dark; }
+      html, body { margin: 0; padding: 0; height: 100%;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          "Helvetica Neue", Arial, sans-serif;
+        background: #0f1115; color: #e6e6e6; }
+      main { min-height: 100%; display: grid; place-items: center; padding: 2rem; }
+      .card { width: 100%; max-width: 420px; background: #161922;
+        border: 1px solid #262a36; border-radius: 12px; padding: 1.5rem;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.35); }
+      h1 { margin: 0 0 0.5rem; font-size: 1.1rem; font-weight: 600; }
+      p  { margin: 0 0 1.25rem; color: #9aa3b2; font-size: 0.9rem; line-height: 1.5; }
+      label { display: block; font-size: 0.78rem; color: #9aa3b2;
+        margin: 0.75rem 0 0.35rem; text-transform: uppercase; letter-spacing: 0.05em; }
+      input[type=text] { width: 100%; box-sizing: border-box;
+        padding: 0.6rem 0.75rem; background: #0f1218; color: #e6e6e6;
+        border: 1px solid #2a2f3d; border-radius: 8px; font-size: 0.95rem;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: 0.05em; }
+      input[type=text]:focus { outline: none; border-color: #4a73ff; }
+      button { width: 100%; margin-top: 1.25rem; padding: 0.65rem 0.75rem;
+        background: #4a73ff; color: white; border: 0; border-radius: 8px;
+        font-size: 0.95rem; font-weight: 600; cursor: pointer; }
+      button:hover { background: #3a63ef; }
+      .hint { color: #777f8c; font-size: 0.78rem; margin-top: 0.85rem; }
+      .err { margin-top: 0.85rem; color: #ff7676; font-size: 0.85rem; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <form class="card" method="post" action="/cli">
+        <h1>approve this device</h1>
+        <p>
+          enter the pairing code shown by your CLI, then click approve.
+          {% if requires_setup_code %}
+            this is the first device — a setup code is also required.
+          {% endif %}
+        </p>
+
+        <label for="device_code">pairing code</label>
+        <input type="text" id="device_code" name="device_code"
+               value="{{ prefill_device_code }}"
+               autocomplete="off" autocapitalize="characters" required />
+
+        <label for="label">device label</label>
+        <input type="text" id="label" name="label"
+               value="{{ prefill_label }}"
+               placeholder="e.g. Fernando's MacBook" required />
+
+        {% if requires_setup_code %}
+          <label for="setup_code">setup code</label>
+          <input type="text" id="setup_code" name="setup_code"
+                 autocomplete="off" autocapitalize="characters" required />
+        {% endif %}
+
+        <button type="submit">approve</button>
+
+        {% if let Some(e) = error %}
+          <div class="err">{{ e }}</div>
+        {% endif %}
+
+        <div class="hint">scope: <strong>{{ scope }}</strong></div>
+      </form>
+    </main>
+  </body>
+</html>

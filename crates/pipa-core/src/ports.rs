@@ -131,4 +131,18 @@ pub trait AuthStore: Send + Sync {
         operation: &str,
         target: Option<&str>,
     ) -> Result<bool>;
+    /// Non-mutating peek: returns one of
+    /// `"pending" | "confirmed" | "consumed" | "expired"` or `"unknown"` when
+    /// the code does not exist. Used by the polling status endpoint so the
+    /// CLI can wait without observing partial state via mutating calls.
+    async fn step_up_observe(&self, code: &str) -> Result<&'static str>;
+
+    /// Fetch a single step-up token by code. Used by the confirmation page
+    /// to render the operation/target/device summary before the user clicks
+    /// "confirm". Returns `Ok(None)` for unknown codes.
+    async fn step_up_get(&self, code: &str) -> Result<Option<StepUpToken>>;
+
+    /// Fetch a single device by id. Used by the confirmation page to render
+    /// the requesting device's human label.
+    async fn get_device(&self, id: &str) -> Result<Option<Device>>;
 }

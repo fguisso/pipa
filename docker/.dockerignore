@@ -1,0 +1,16 @@
+# Keep the build context lean. Anything not needed by `cargo build` is noise.
+target/
+**/target/
+data/
+pages/
+.git/
+.github/
+.claude/
+docker/data/
+docker/pages/
+docker/caddy_data/
+docker/caddy_config/
+ui/widget/node_modules/
+**/node_modules/
+*.log
+.DS_Store

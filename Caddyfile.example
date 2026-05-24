@@ -1,0 +1,55 @@
+# Caddyfile.example — for running Caddy directly on the host (no Docker).
+#
+# Use this when:
+#   - You installed Caddy from the OS package manager (`apt install caddy`,
+#     `brew install caddy`, etc.) and pipa-server runs alongside it
+#     (typically via the systemd unit at packaging/systemd/pipa-server.service).
+#   - pipa-server is listening on 127.0.0.1:8080.
+#
+# If you're using docker-compose instead, the upstream is `pipa:8080` (over
+# the Docker bridge) — see docker/Caddyfile in that case.
+#
+# Install:
+#   sudo cp Caddyfile.example /etc/caddy/Caddyfile
+#   sudo $EDITOR /etc/caddy/Caddyfile    # change the two CHANGE ME lines
+#   sudo systemctl reload caddy
+#
+# Auto HTTPS:
+#   Caddy will obtain and renew a Let's Encrypt cert automatically on first
+#   request. Make sure ports 80 + 443 are reachable from the public internet
+#   (or use DNS-01: https://caddyserver.com/docs/automatic-https#dns-challenge).
+
+# CHANGE ME: replace with your actual domain.
+pages.example.com {
+    # CHANGE ME: replace with the email Let's Encrypt should contact for
+    # cert expiry warnings / account recovery.
+    tls your@email.example
+
+    encode zstd gzip
+
+    # Upstream is local — pipa-server bound to 127.0.0.1:8080. In
+    # pages.toml, set `[server].trusted_proxy = "127.0.0.1"` so the server
+    # honors X-Forwarded-* from this proxy.
+    reverse_proxy 127.0.0.1:8080 {
+        header_up X-Forwarded-Proto {scheme}
+        header_up X-Forwarded-Host  {host}
+        header_up X-Forwarded-For   {remote_host}
+    }
+
+    # HSTS — 2 years, preload-eligible. See SECURITY.md §2.
+    header Strict-Transport-Security "max-age=63072000; includeSubDomains; preload"
+    header X-Content-Type-Options    "nosniff"
+    header Referrer-Policy           "strict-origin-when-cross-origin"
+    header Permissions-Policy        "interest-cohort=()"
+
+    # Defense in depth: hide upstream identity.
+    header -Server
+
+    log {
+        output file /var/log/caddy/pipa.log {
+            roll_size 10mb
+            roll_keep 5
+        }
+        format console
+    }
+}

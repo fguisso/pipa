@@ -2,6 +2,7 @@ use anyhow::Result;
 use clap::Parser;
 use tracing_subscriber::EnvFilter;
 
+mod auth;
 mod cli;
 mod error;
 mod ip_hash;

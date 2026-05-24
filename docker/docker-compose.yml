@@ -1,0 +1,60 @@
+# docker-compose.yml — pipa + Caddy reverse proxy.
+#
+# Usage:
+#   cd docker/
+#   # 1. Edit ./Caddyfile and replace `pages.example.com` + the tls email.
+#   # 2. Drop a pages.toml next to this file (copy from ../pages.example.toml).
+#   # 3. docker compose up -d
+#
+# The `pipa` service is NOT published on the host — only Caddy is. All
+# traffic flows: internet :443 -> caddy -> pipa:8080 (over the internal
+# `pipa-net` bridge). This matches SECURITY.md: pipa-server speaks HTTP
+# only and lives behind a TLS-terminating proxy.
+
+name: pipa
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"     # ACME HTTP-01 challenge + redirect to 443
+      - "443:443"
+      - "443:443/udp"  # HTTP/3 (QUIC)
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data        # persistent cert storage (Let's Encrypt account + certs)
+      - caddy_config:/config
+    depends_on:
+      pipa:
+        condition: service_healthy
+    networks:
+      - pipa-net
+
+  pipa:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    image: ghcr.io/fguisso/pipa:0.1.0   # CHANGE ME: pin to a released tag in prod
+    restart: unless-stopped
+    # Intentionally NO `ports:` — pipa-server is HTTP-only and must not be
+    # reachable from the host network. Caddy reaches it over `pipa-net`.
+    expose:
+      - "8080"
+    volumes:
+      - ./pages.toml:/etc/pipa/pages.toml:ro   # CHANGE ME: copy from pages.example.toml
+      - ./data:/data
+      - ./pages:/pages
+    environment:
+      # Override per env; `pages.toml` is the source of truth for everything else.
+      RUST_LOG: "info,pipa=debug"
+    networks:
+      - pipa-net
+
+networks:
+  pipa-net:
+    driver: bridge
+
+volumes:
+  caddy_data:
+  caddy_config:

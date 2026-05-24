@@ -1,0 +1,46 @@
+# Caddyfile — for use with docker/docker-compose.yml.
+#
+# This file is loaded by the `caddy` service in compose. The upstream
+# (`pipa:8080`) is resolved over Docker's internal DNS on the `pipa-net`
+# bridge — DO NOT change it to a localhost address.
+#
+# If you're running Caddy directly on the host instead (no Docker), use the
+# root `Caddyfile.example` at the repo root — its upstream is 127.0.0.1:8080.
+#
+# Auto HTTPS:
+#   Caddy will obtain and renew a Let's Encrypt certificate automatically.
+#   For DNS-01 (wildcards, private networks), see:
+#   https://caddyserver.com/docs/automatic-https#dns-challenge
+
+# CHANGE ME: replace with your actual domain.
+pages.example.com {
+    # CHANGE ME: replace with the email Let's Encrypt should contact for
+    # cert expiry warnings / account recovery.
+    tls your@email.example
+
+    encode zstd gzip
+
+    # Tell pipa-server the real client IP + scheme. The server only honors
+    # these headers from the IP in `[server].trusted_proxy` (set to the
+    # Docker bridge IP of `caddy`, usually 172.x.x.x — see compose docs).
+    reverse_proxy pipa:8080 {
+        header_up X-Forwarded-Proto {scheme}
+        header_up X-Forwarded-Host  {host}
+        header_up X-Forwarded-For   {remote_host}
+    }
+
+    # HSTS — 2 years, preload-eligible. See SECURITY.md §2.
+    header Strict-Transport-Security "max-age=63072000; includeSubDomains; preload"
+    header X-Content-Type-Options    "nosniff"
+    header Referrer-Policy           "strict-origin-when-cross-origin"
+    header Permissions-Policy        "interest-cohort=()"
+
+    # Defense in depth: hide upstream identity. pipa-server already omits
+    # `Server` / `X-Powered-By`, but Caddy adds its own — strip it.
+    header -Server
+
+    log {
+        output stdout
+        format console
+    }
+}

@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>confirm — pages</title>
+    <style>
+      :root { color-scheme: light dark; }
+      html, body { margin: 0; padding: 0; height: 100%;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          "Helvetica Neue", Arial, sans-serif;
+        background: #0f1115; color: #e6e6e6; }
+      main { min-height: 100%; display: grid; place-items: center; padding: 2rem; }
+      .card { width: 100%; max-width: 460px; background: #161922;
+        border: 1px solid #262a36; border-radius: 12px; padding: 1.5rem;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.35); }
+      h1 { margin: 0 0 0.85rem; font-size: 1.1rem; font-weight: 600;
+        color: #ffb86c; }
+      .row { display: flex; justify-content: space-between;
+        padding: 0.45rem 0; border-bottom: 1px solid #1f2330;
+        font-size: 0.88rem; }
+      .row:last-child { border-bottom: 0; }
+      .row .k { color: #777f8c; }
+      .row .v { color: #e6e6e6; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+      button { width: 100%; margin-top: 1.25rem; padding: 0.7rem 0.75rem;
+        background: #ff7676; color: white; border: 0; border-radius: 8px;
+        font-size: 0.95rem; font-weight: 600; cursor: pointer; }
+      button:hover { background: #e85c5c; }
+      .ttl { margin-top: 0.85rem; color: #777f8c; font-size: 0.78rem; text-align: center; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <form class="card" method="post" action="/confirm/{{ code }}">
+        <h1>⚠ confirm destructive operation</h1>
+        <div class="row"><span class="k">operation</span><span class="v">{{ operation }}</span></div>
+        {% if let Some(t) = target %}
+          <div class="row"><span class="k">target</span><span class="v">{{ t }}</span></div>
+        {% endif %}
+        <div class="row"><span class="k">device</span><span class="v">{{ device_label }}</span></div>
+        {% if let Some(ip) = requesting_ip_short %}
+          <div class="row"><span class="k">from</span><span class="v">{{ ip }}</span></div>
+        {% endif %}
+        <button type="submit">confirm</button>
+        <div class="ttl">expires in {{ expires_in_human }}</div>
+      </form>
+    </main>
+  </body>
+</html>

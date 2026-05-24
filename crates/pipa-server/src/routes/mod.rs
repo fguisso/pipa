@@ -3,6 +3,8 @@ use axum::Router;
 use crate::middleware::headers::SecurityHeadersLayer;
 use crate::state::AppState;
 
+pub mod auth;
+pub mod devices;
 pub mod health;
 pub mod public;
 pub mod stubs;
@@ -10,7 +12,8 @@ pub mod stubs;
 /// Top-level router. Composes:
 ///   - public file serving at `/p/<uuid>/*`
 ///   - `/health`
-///   - M3–M5 stubs returning 501 so the URL space is reserved
+///   - real auth + devices routes (M3)
+///   - remaining stubs for M4 (pages / comments / admin) returning 501
 ///
 /// Global hardening headers are applied here; the page CSP is applied as a
 /// per-route layer inside `public::router()`.
@@ -18,6 +21,8 @@ pub fn router(state: AppState) -> Router {
     Router::new()
         .merge(public::router(state.clone()))
         .merge(health::router())
+        .merge(auth::router())
+        .merge(devices::router())
         .merge(stubs::router())
         .layer(SecurityHeadersLayer)
         .with_state(state)

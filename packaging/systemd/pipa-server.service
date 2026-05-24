@@ -1,0 +1,68 @@
+# pipa-server systemd unit.
+#
+# install:
+#   cp packaging/systemd/pipa-server.service /etc/systemd/system/ && systemctl daemon-reload && systemctl enable --now pipa-server
+#
+# Assumes the binary lives at /usr/local/bin/pipa-server, the config at
+# /etc/pipa/pages.toml, and state at /var/lib/pipa/. The `pipa` user and
+# all directories are created by packaging/install.sh.
+#
+# pipa-server is HTTP-only by design (see adr/0005-tls-termination.md), so
+# this unit deliberately runs as a non-root user with no privileged-port
+# capabilities. Caddy (or another TLS-terminating proxy) sits in front of it
+# on :80 / :443.
+
+[Unit]
+Description=pipa — self-hosted static site + comments + analytics
+Documentation=https://github.com/fguisso/pipa
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pipa
+Group=pipa
+
+ExecStart=/usr/local/bin/pipa-server --config /etc/pipa/pages.toml
+Restart=on-failure
+RestartSec=5
+
+# ─── Hardening ──────────────────────────────────────────────────────────────
+# Filesystem
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ReadWritePaths=/var/lib/pipa
+
+# Kernel surface
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+ProtectProc=invisible
+ProcSubset=pid
+
+# Process / memory
+LockPersonality=true
+MemoryDenyWriteExecute=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+RestrictNamespaces=true
+SystemCallArchitectures=native
+
+# Network — we only need Unix sockets + IPv4/IPv6.
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+
+# Capabilities — drop everything. Bind is to a high port (8080), no caps needed.
+CapabilityBoundingSet=
+AmbientCapabilities=
+
+# Misc
+UMask=0027
+
+[Install]
+WantedBy=multi-user.target

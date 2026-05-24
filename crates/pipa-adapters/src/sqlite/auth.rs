@@ -678,6 +678,47 @@ impl AuthStore for SqliteAuthStore {
         .map_err(db)?;
         Ok(res.rows_affected() == 1)
     }
+
+    async fn step_up_observe(&self, code: &str) -> Result<&'static str> {
+        let now = self.clock.now();
+        let row = sqlx::query("SELECT * FROM step_up_tokens WHERE code = ?")
+            .bind(code)
+            .fetch_optional(&self.pool)
+            .await
+            .map_err(db)?;
+        let Some(row) = row else { return Ok("unknown") };
+        let token: StepUpToken = super::mapping::step_up_from_row(&row)?;
+        if token.consumed_at.is_some() {
+            return Ok("consumed");
+        }
+        if token.expires_at < now && token.confirmed_at.is_none() {
+            return Ok("expired");
+        }
+        if token.confirmed_at.is_some() {
+            return Ok("confirmed");
+        }
+        Ok("pending")
+    }
+
+    async fn step_up_get(&self, code: &str) -> Result<Option<StepUpToken>> {
+        let row = sqlx::query("SELECT * FROM step_up_tokens WHERE code = ?")
+            .bind(code)
+            .fetch_optional(&self.pool)
+            .await
+            .map_err(db)?;
+        let Some(row) = row else { return Ok(None) };
+        Ok(Some(super::mapping::step_up_from_row(&row)?))
+    }
+
+    async fn get_device(&self, id: &str) -> Result<Option<Device>> {
+        let row = sqlx::query("SELECT * FROM devices WHERE id = ?")
+            .bind(id)
+            .fetch_optional(&self.pool)
+            .await
+            .map_err(db)?;
+        let Some(row) = row else { return Ok(None) };
+        Ok(Some(super::mapping::device_from_row(&row)?))
+    }
 }
 
 // Keep these around — they're useful for non-pairing flows that need symmetric

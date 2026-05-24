@@ -2,9 +2,8 @@
 //!
 //! Drives the device flow end-to-end:
 //!   1. Resolve server URL (flag → config → prompt).
-//!   2. POST `device-init` (passing the setup_code if the user has one; the
-//!      server will only enforce it for the first device anyway).
-//!   3. Render verify_url + a terminal QR.
+//!   2. POST `device-init` (anonymous — approval gating lives in the browser).
+//!   3. Auto-open `verify_url` in the user's browser; also print URL + QR.
 //!   4. Poll `device-poll` every 2s until Approved or expired (10 min).
 //!   5. Stash refresh in the highest-tier credstore available.
 //!   6. Pretty-print the storage tier so the user knows what protects it.
@@ -16,6 +15,7 @@ use dialoguer::{Input, theme::ColorfulTheme};
 use pipa_sdk::{Client, DevicePoll};
 use tokio::time::sleep;
 
+use crate::browser;
 use crate::cli::LoginArgs;
 use crate::config::{self, Config};
 use crate::credstore;
@@ -44,47 +44,27 @@ pub async fn run(args: LoginArgs) -> Result<()> {
 
     let scope = if args.automation { "automation" } else { "interactive" };
 
-    // The current server requires a `setup_code` only when no device exists
-    // yet — but it doesn't expose that fact to anonymous callers, and the
-    // server quietly accepts (and ignores) the field on subsequent devices
-    // when an interactive bearer is presented. We let the user paste a code
-    // optionally; an empty string is fine.
-    let setup_code: String = Input::with_theme(&theme)
-        .with_prompt(format!(
-            "setup code (printed by `pipa-server` on first boot; leave blank if you have an active session on this host)"
-        ))
-        .allow_empty(true)
-        .interact_text()?;
-    let setup_code = setup_code.trim().to_string();
-    let setup_code = (!setup_code.is_empty()).then_some(setup_code);
-
     let client = Client::new(&server, None)?;
 
-    let init = match client
-        .device_init(scope, args.label.as_deref(), setup_code.as_deref(), None)
+    let init = client
+        .device_init(scope, args.label.as_deref())
         .await
-    {
-        Ok(r) => r,
-        Err(e) => {
-            // Subsequent-device path: server requires `manage:devices` bearer.
-            // Detect 401 and tell the user what to do, rather than dumping a raw error.
-            if e.status() == Some(401) {
-                bail!(
-                    "server requires an existing session to register another device.\n\
-                     mint a fresh setup code on the host with `pipa-server setup`, then re-run `pipa login`."
-                );
-            }
-            return Err(anyhow::Error::from(e));
-        }
-    };
+        .context("failed to start device-flow with server")?;
+
+    let opened = browser::try_open(&init.verify_url);
 
     println!();
-    println!("► visit on any device:");
-    println!("    {}", cyan(&init.verify_url));
+    if opened {
+        println!("► browser opened — approve on the page that just loaded.");
+        println!("  if nothing opened, visit:");
+        println!("    {}", cyan(&init.verify_url));
+    } else {
+        println!("► visit on any device:");
+        println!("    {}", cyan(&init.verify_url));
+    }
     println!("► or scan:");
     let qr_str = qr::render(&init.verify_url).unwrap_or_default();
     println!("{qr_str}");
-    println!("► device code: {}", cyan(&init.device_code));
     println!("► waiting for approval (polling every {POLL_INTERVAL_SECS}s, expires in 10:00)…");
     println!();
 

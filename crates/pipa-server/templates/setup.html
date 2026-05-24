@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>create admin — pipa</title>
+    <style>
+      :root { color-scheme: light dark; }
+      html, body { margin: 0; padding: 0; height: 100%;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          "Helvetica Neue", Arial, sans-serif;
+        background: #0f1115; color: #e6e6e6; }
+      main { min-height: 100%; display: grid; place-items: center; padding: 2rem; }
+      .card { width: 100%; max-width: 460px; background: #161922;
+        border: 1px solid #262a36; border-radius: 12px; padding: 1.75rem;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.35); }
+      h1 { margin: 0 0 0.5rem; font-size: 1.15rem; font-weight: 600; }
+      p  { margin: 0 0 1.25rem; color: #9aa3b2; font-size: 0.9rem; line-height: 1.55; }
+      label { display: block; font-size: 0.78rem; color: #9aa3b2;
+        margin: 0.75rem 0 0.35rem; text-transform: uppercase; letter-spacing: 0.05em; }
+      input { width: 100%; box-sizing: border-box;
+        padding: 0.6rem 0.75rem; background: #0f1218; color: #e6e6e6;
+        border: 1px solid #2a2f3d; border-radius: 8px; font-size: 0.95rem;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+      input:focus { outline: none; border-color: #4a73ff; }
+      .pill { display: inline-block; padding: 0.15rem 0.55rem;
+        background: #1f2330; color: #c9d0db; font-size: 0.72rem;
+        border-radius: 999px; letter-spacing: 0.04em; margin-bottom: 0.5rem; }
+      button { width: 100%; margin-top: 1.25rem; padding: 0.7rem 0.75rem;
+        background: #4a73ff; color: white; border: 0; border-radius: 8px;
+        font-size: 0.95rem; font-weight: 600; cursor: pointer; }
+      button:hover { background: #3a63ef; }
+      .err { margin-top: 0.85rem; color: #ff7676; font-size: 0.85rem; }
+      .hint { color: #777f8c; font-size: 0.78rem; margin-top: 0.9rem; line-height: 1.5; }
+      .gpa-brand-svg { display: block; margin: 0 auto 1.25rem; height: 2.25rem; width: auto; color: #e6e6e6; }
+    </style>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Didact+Gothic&display=swap">
+    <link rel="icon" type="image/svg+xml" href="/admin/assets/favicon.svg" />
+  </head>
+  <body>
+    <main>
+      <form class="card" method="post" action="/setup" autocomplete="off">
+        {% include "partials/brand.html" %}
+        <div class="pill">first boot</div>
+        <h1>create your admin account</h1>
+        <p>
+          this server has no owner yet. set a username and password — these
+          are the credentials you'll use to sign in to the admin UI and to
+          approve <code>pipa login</code> from any CLI.
+        </p>
+
+        <label for="username">username</label>
+        <input type="text" id="username" name="username"
+               value="{{ prefill_username }}"
+               autocapitalize="none" autocomplete="username" required />
+
+        <label for="password">password</label>
+        <input type="password" id="password" name="password"
+               autocomplete="new-password" required minlength="8" />
+
+        <label for="password_confirm">confirm password</label>
+        <input type="password" id="password_confirm" name="password_confirm"
+               autocomplete="new-password" required minlength="8" />
+
+        {% if let Some(n) = next %}
+          <input type="hidden" name="next" value="{{ n }}" />
+        {% endif %}
+
+        <button type="submit">create admin</button>
+
+        {% if let Some(e) = error %}
+          <div class="err">{{ e }}</div>
+        {% endif %}
+
+        <div class="hint">
+          forgot your password later? run <code>pipa-server reset-claim</code>
+          on the host to wipe the admin and start fresh.
+        </div>
+      </form>
+    </main>
+  </body>
+</html>

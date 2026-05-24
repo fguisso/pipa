@@ -84,6 +84,32 @@ pub struct SetupCode {
     pub consumed_at: Option<i64>,
 }
 
+/// The server's admin user. Phase 1 is single-owner — at most one row
+/// exists. Created at first `/setup` via the username + password wizard.
+/// Holds a reference to a synthetic device row used to mint access tokens
+/// for admin-UI handlers.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Admin {
+    pub id: String,
+    pub username: String,
+    pub password_hash: String,
+    pub synthetic_device_id: String,
+    pub created_at: i64,
+}
+
+/// A browser session that belongs to the admin. Identifies the holder of the
+/// signed `pipa_owner` cookie. Created at admin signup and on every
+/// successful `/admin/login`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OwnerSession {
+    pub id: String,
+    pub created_at: i64,
+    pub last_seen_at: Option<i64>,
+    pub user_agent: Option<String>,
+    pub ip: Option<String>,
+    pub revoked_at: Option<i64>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DevicePairing {
     pub code: String,

@@ -1,8 +1,9 @@
 //! Browser-facing pages for the device-pairing flow.
 //!
-//! `GET /cli` renders the approval form. The user types the pairing code
-//! from their terminal, the human label they want, and — if this is the
-//! first device — the setup code. Submitting POST /cli runs the approval.
+//! `GET /cli` is owner-only — the `OwnerCookie` extractor redirects to
+//! `/setup?next=/cli?code=…` when the visitor hasn't claimed the server. The
+//! form is intentionally minimal: the pairing code arrives via `?code=` so the
+//! user only types a device label.
 
 use askama::Template;
 use axum::body::Body;
@@ -13,15 +14,15 @@ use pipa_core::audit::{AuditAction, AuditEvent};
 use pipa_core::device::Scope;
 use serde::Deserialize;
 
+use crate::auth::owner_cookie::OwnerCookie;
 use crate::error::ServerError;
 use crate::state::AppState;
 
 #[derive(Template)]
 #[template(path = "cli.html")]
 struct CliTemplate<'a> {
-    prefill_device_code: &'a str,
+    device_code: &'a str,
     prefill_label: &'a str,
-    requires_setup_code: bool,
     scope: &'a str,
     error: Option<&'a str>,
 }
@@ -49,15 +50,19 @@ pub struct CliQuery {
 }
 
 pub async fn cli_get(
-    State(state): State<AppState>,
+    _: OwnerCookie,
     Query(q): Query<CliQuery>,
 ) -> Response {
-    let devices = state.auth.devices_count().await.unwrap_or(0);
     let scope = q.scope.as_deref().unwrap_or("interactive");
+    let device_code = q.code.as_deref().unwrap_or("");
+    if device_code.is_empty() {
+        return render(CliErrorTemplate {
+            reason: "no pairing code in URL — start `pipa login` on your terminal first",
+        });
+    }
     let tmpl = CliTemplate {
-        prefill_device_code: q.code.as_deref().unwrap_or(""),
+        device_code,
         prefill_label: q.label.as_deref().unwrap_or(""),
-        requires_setup_code: devices == 0,
         scope,
         error: None,
     };
@@ -69,12 +74,11 @@ pub struct CliForm {
     pub device_code: String,
     pub label: String,
     #[serde(default)]
-    pub setup_code: Option<String>,
-    #[serde(default)]
     pub scope: Option<String>,
 }
 
 pub async fn cli_post(
+    _: OwnerCookie,
     State(state): State<AppState>,
     Form(form): Form<CliForm>,
 ) -> Response {
@@ -85,7 +89,6 @@ pub async fn cli_post(
 }
 
 async fn cli_post_inner(state: AppState, form: CliForm) -> Result<Response, ServerError> {
-    let devices = state.auth.devices_count().await?;
     let scope: Scope = form
         .scope
         .as_deref()
@@ -93,25 +96,10 @@ async fn cli_post_inner(state: AppState, form: CliForm) -> Result<Response, Serv
         .parse()
         .unwrap_or(Scope::Interactive);
 
-    if devices == 0 {
-        let code = form.setup_code.as_deref().unwrap_or("");
-        let ok = state.auth.consume_setup_code(code).await?;
-        if !ok {
-            return Ok(render(CliTemplate {
-                prefill_device_code: &form.device_code,
-                prefill_label: &form.label,
-                requires_setup_code: true,
-                scope: scope.as_str(),
-                error: Some("invalid or expired setup code"),
-            }));
-        }
-    }
-
     if form.label.trim().is_empty() {
         return Ok(render(CliTemplate {
-            prefill_device_code: &form.device_code,
+            device_code: &form.device_code,
             prefill_label: &form.label,
-            requires_setup_code: devices == 0,
             scope: scope.as_str(),
             error: Some("label is required"),
         }));

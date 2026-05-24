@@ -5,7 +5,7 @@ use chacha20poly1305::{
     ChaCha20Poly1305, Key, KeyInit, Nonce,
     aead::{Aead, OsRng as ChaChaOsRng},
 };
-use pipa_core::device::{Device, RefreshToken, Scope, SetupCode, StepUpToken};
+use pipa_core::device::{Admin, Device, OwnerSession, RefreshToken, Scope, SetupCode, StepUpToken};
 use pipa_core::error::{CoreError, Result};
 use pipa_core::ids::IdGen;
 use pipa_core::ports::{AuthStore, PollResult, RefreshTokenIssued};
@@ -15,7 +15,10 @@ use rand::rngs::OsRng;
 use sha2::{Digest, Sha256};
 use sqlx::{Row, SqlitePool};
 
-use super::mapping::{device_from_row, pairing_from_row, refresh_from_row, setup_from_row};
+use super::mapping::{
+    admin_from_row, device_from_row, owner_session_from_row, pairing_from_row, refresh_from_row,
+    setup_from_row,
+};
 
 /// 90 days in seconds; pairings issue tokens with this TTL by default.
 const PAIRING_REFRESH_TTL: i64 = 7_776_000;
@@ -718,6 +721,230 @@ impl AuthStore for SqliteAuthStore {
             .map_err(db)?;
         let Some(row) = row else { return Ok(None) };
         Ok(Some(super::mapping::device_from_row(&row)?))
+    }
+
+    async fn owner_sessions_count(&self) -> Result<u64> {
+        let n: i64 = sqlx::query(
+            "SELECT COUNT(*) AS c FROM owner_sessions WHERE revoked_at IS NULL",
+        )
+        .fetch_one(&self.pool)
+        .await
+        .map_err(db)?
+        .try_get("c")
+        .map_err(db)?;
+        Ok(n as u64)
+    }
+
+    async fn create_owner_session(
+        &self,
+        user_agent: Option<&str>,
+        ip: Option<&str>,
+    ) -> Result<OwnerSession> {
+        let id = self.new_id();
+        let now = self.clock.now();
+        sqlx::query(
+            r#"
+            INSERT INTO owner_sessions (id, created_at, last_seen_at, user_agent, ip)
+            VALUES (?, ?, ?, ?, ?)
+            "#,
+        )
+        .bind(&id)
+        .bind(now)
+        .bind(now)
+        .bind(user_agent)
+        .bind(ip)
+        .execute(&self.pool)
+        .await
+        .map_err(db)?;
+        Ok(OwnerSession {
+            id,
+            created_at: now,
+            last_seen_at: Some(now),
+            user_agent: user_agent.map(|s| s.to_string()),
+            ip: ip.map(|s| s.to_string()),
+            revoked_at: None,
+        })
+    }
+
+    async fn find_owner_session(&self, id: &str) -> Result<Option<OwnerSession>> {
+        let row = sqlx::query(
+            "SELECT * FROM owner_sessions WHERE id = ? AND revoked_at IS NULL",
+        )
+        .bind(id)
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(db)?;
+        let Some(row) = row else { return Ok(None) };
+        Ok(Some(owner_session_from_row(&row)?))
+    }
+
+    async fn touch_owner_session(&self, id: &str) -> Result<()> {
+        let now = self.clock.now();
+        sqlx::query("UPDATE owner_sessions SET last_seen_at = ? WHERE id = ?")
+            .bind(now)
+            .bind(id)
+            .execute(&self.pool)
+            .await
+            .map_err(db)?;
+        Ok(())
+    }
+
+    async fn list_owner_sessions(&self) -> Result<Vec<OwnerSession>> {
+        let rows = sqlx::query("SELECT * FROM owner_sessions ORDER BY created_at DESC")
+            .fetch_all(&self.pool)
+            .await
+            .map_err(db)?;
+        rows.iter().map(owner_session_from_row).collect()
+    }
+
+    async fn revoke_owner_session(&self, id: &str) -> Result<()> {
+        let now = self.clock.now();
+        let res = sqlx::query(
+            "UPDATE owner_sessions SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL",
+        )
+        .bind(now)
+        .bind(id)
+        .execute(&self.pool)
+        .await
+        .map_err(db)?;
+        if res.rows_affected() == 0 {
+            return Err(CoreError::NotFound);
+        }
+        Ok(())
+    }
+
+    async fn count_admins(&self) -> Result<u64> {
+        let n: i64 = sqlx::query("SELECT COUNT(*) AS c FROM admins")
+            .fetch_one(&self.pool)
+            .await
+            .map_err(db)?
+            .try_get("c")
+            .map_err(db)?;
+        Ok(n as u64)
+    }
+
+    async fn create_admin(&self, username: &str, password_hash: &str) -> Result<Admin> {
+        let now = self.clock.now();
+        let admin_id = self.new_id();
+        let device_id = self.new_id();
+
+        let mut tx = self.pool.begin().await.map_err(db)?;
+
+        let existing: i64 = sqlx::query("SELECT COUNT(*) AS c FROM admins")
+            .fetch_one(&mut *tx)
+            .await
+            .map_err(db)?
+            .try_get("c")
+            .map_err(db)?;
+        if existing > 0 {
+            return Err(CoreError::AlreadyExists);
+        }
+
+        sqlx::query(
+            "INSERT INTO devices (id, label, scope, created_at) VALUES (?, ?, ?, ?)",
+        )
+        .bind(&device_id)
+        .bind("Admin Web UI")
+        .bind(Scope::Interactive.as_str())
+        .bind(now)
+        .execute(&mut *tx)
+        .await
+        .map_err(db)?;
+
+        sqlx::query(
+            r#"
+            INSERT INTO admins
+                (id, username, password_hash, synthetic_device_id, created_at)
+            VALUES (?, ?, ?, ?, ?)
+            "#,
+        )
+        .bind(&admin_id)
+        .bind(username)
+        .bind(password_hash)
+        .bind(&device_id)
+        .bind(now)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| {
+            // SQLite UNIQUE on username — surface as a clear typed error.
+            let msg = e.to_string();
+            if msg.contains("UNIQUE") && msg.contains("admins.username") {
+                CoreError::AlreadyExists
+            } else {
+                db(e)
+            }
+        })?;
+
+        tx.commit().await.map_err(db)?;
+
+        Ok(Admin {
+            id: admin_id,
+            username: username.to_string(),
+            password_hash: password_hash.to_string(),
+            synthetic_device_id: device_id,
+            created_at: now,
+        })
+    }
+
+    async fn find_admin_by_username(&self, username: &str) -> Result<Option<Admin>> {
+        let row = sqlx::query("SELECT * FROM admins WHERE username = ?")
+            .bind(username)
+            .fetch_optional(&self.pool)
+            .await
+            .map_err(db)?;
+        let Some(row) = row else { return Ok(None) };
+        Ok(Some(admin_from_row(&row)?))
+    }
+
+    async fn get_admin(&self) -> Result<Option<Admin>> {
+        let row = sqlx::query("SELECT * FROM admins LIMIT 1")
+            .fetch_optional(&self.pool)
+            .await
+            .map_err(db)?;
+        let Some(row) = row else { return Ok(None) };
+        Ok(Some(admin_from_row(&row)?))
+    }
+
+    async fn delete_admin(&self) -> Result<()> {
+        let now = self.clock.now();
+
+        let mut tx = self.pool.begin().await.map_err(db)?;
+
+        let row = sqlx::query("SELECT * FROM admins LIMIT 1")
+            .fetch_optional(&mut *tx)
+            .await
+            .map_err(db)?;
+        let Some(row) = row else {
+            tx.commit().await.map_err(db)?;
+            return Ok(());
+        };
+        let admin = admin_from_row(&row)?;
+
+        sqlx::query("DELETE FROM admins WHERE id = ?")
+            .bind(&admin.id)
+            .execute(&mut *tx)
+            .await
+            .map_err(db)?;
+
+        // Revoke the synthetic device + cascade-revoke its refresh tokens so
+        // any stale access tokens stop working immediately.
+        sqlx::query("UPDATE devices SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL")
+            .bind(now)
+            .bind(&admin.synthetic_device_id)
+            .execute(&mut *tx)
+            .await
+            .map_err(db)?;
+        sqlx::query(
+            "UPDATE refresh_tokens SET revoked_at = ? WHERE device_id = ? AND revoked_at IS NULL",
+        )
+        .bind(now)
+        .bind(&admin.synthetic_device_id)
+        .execute(&mut *tx)
+        .await
+        .map_err(db)?;
+
+        tx.commit().await.map_err(db)?;
+        Ok(())
     }
 }
 

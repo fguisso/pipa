@@ -1,19 +1,23 @@
 {% extends "admin/base.html" %}
 
-{% block title %}login — admin{% endblock %}
+{% block title %}sign in — admin{% endblock %}
 
 {% block content %}
   <section class="gpa-card gpa-card--narrow">
-    <h1>admin login</h1>
+    <h1>sign in</h1>
     <p class="gpa-muted">
-      paste a refresh token from your CLI to start a session.
-      run <code>pages login</code> on a trusted machine, then
-      <code>pages auth print-refresh</code> to copy one here.
+      sign in with the admin credentials you created at first boot.
     </p>
-    <form method="post" action="{{ ui_path }}/login" class="gpa-form">
-      <label for="refresh">refresh token</label>
-      <input type="text" id="refresh" name="refresh" autocomplete="off"
-             spellcheck="false" required />
+    <form method="post" action="{{ ui_path }}/login" class="gpa-form" autocomplete="off">
+      <label for="username">username</label>
+      <input type="text" id="username" name="username"
+             value="{{ prefill_username }}"
+             autocomplete="username" autocapitalize="none" required />
+
+      <label for="password">password</label>
+      <input type="password" id="password" name="password"
+             autocomplete="current-password" required />
+
       <button type="submit">sign in</button>
       {% if let Some(e) = error %}
         <div class="gpa-error">{{ e }}</div>

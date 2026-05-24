@@ -45,16 +45,25 @@ pub async fn run(cli: Cli) -> Result<()> {
         .with_context(|| format!("loading HMAC key at {}", hmac_path.display()))?;
 
     // Handle the one subcommand here so it can reuse the same DB connection.
-    if let Some(Command::Setup) = cli.command {
-        let setup = auth.issue_setup_code().await?;
-        let mins = (setup.expires_at - setup.created_at) / 60;
-        println!("[pages] setup code: {}  (expires in {:02}:00)", setup.code, mins);
+    if let Some(Command::ResetClaim) = cli.command {
+        let sessions = auth.list_owner_sessions().await?;
+        let mut revoked = 0u32;
+        for s in sessions {
+            if s.revoked_at.is_some() {
+                continue;
+            }
+            auth.revoke_owner_session(&s.id).await?;
+            revoked += 1;
+        }
+        auth.delete_admin().await?;
+        println!("[pipa] revoked {revoked} owner session(s) and removed the admin user.");
+        println!("[pipa] open /setup in your browser to create a new admin.");
         return Ok(());
     }
 
     let state = AppState::new(repo, auth.clone(), storage, hmac_key, config.clone());
 
-    bootstrap_if_first_boot(&state, &data_dir).await?;
+    announce_first_boot(&state).await?;
 
     if state.config.server.dev {
         tracing::warn!(
@@ -100,58 +109,14 @@ fn ensure_dirs(data_dir: &PathBuf, pages_dir: &PathBuf) -> Result<()> {
     Ok(())
 }
 
-async fn bootstrap_if_first_boot(state: &AppState, data_dir: &PathBuf) -> Result<()> {
-    let devices = state.auth.devices_count().await?;
-    if devices > 0 {
+async fn announce_first_boot(state: &AppState) -> Result<()> {
+    let admins = state.auth.count_admins().await?;
+    if admins > 0 {
         return Ok(());
     }
-    let code = state.auth.issue_setup_code().await?;
-    let mins = (code.expires_at - code.created_at) / 60;
-    println!("[pages] no devices registered.");
-    println!(
-        "[pages] setup code: {}  (expires in {:02}:00)",
-        code.code, mins
-    );
-    println!("[pages] from your laptop, run:");
-    println!(
-        "[pages]   pages login --server {}",
-        state.config.server.public_url
-    );
-    println!("[pages]   when prompted, enter the code above.");
-
-    let setup_path = data_dir.join(".setup-code");
-    write_setup_code(&setup_path, &code.code)?;
-    Ok(())
-}
-
-#[cfg(unix)]
-fn write_setup_code(path: &PathBuf, code: &str) -> Result<()> {
-    use std::io::Write;
-    use std::os::unix::fs::OpenOptionsExt;
-    let mut f = std::fs::OpenOptions::new()
-        .write(true)
-        .create(true)
-        .truncate(true)
-        .mode(0o600)
-        .open(path)
-        .with_context(|| format!("writing setup code to {}", path.display()))?;
-    writeln!(f, "{code}")?;
-    Ok(())
-}
-
-#[cfg(not(unix))]
-fn write_setup_code(path: &PathBuf, code: &str) -> Result<()> {
-    use std::io::Write;
-    let mut f = std::fs::OpenOptions::new()
-        .write(true)
-        .create(true)
-        .truncate(true)
-        .open(path)
-        .with_context(|| format!("writing setup code to {}", path.display()))?;
-    writeln!(f, "{code}")?;
-    tracing::warn!(
-        path = %path.display(),
-        "wrote setup code without unix file permissions - secure manually"
-    );
+    let url = state.config.server.public_url.trim_end_matches('/');
+    println!("[pipa] no admin yet.");
+    println!("[pipa] open {url}/setup in your browser to create your admin account.");
+    println!("[pipa] then run `pipa login --server {url}` from any machine.");
     Ok(())
 }

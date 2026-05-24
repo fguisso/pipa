@@ -7,6 +7,7 @@ use crate::error::CoreError;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum AuditAction {
+    OwnerClaim,
     AuthLogin,
     AuthRefresh,
     AuthRevoke,
@@ -24,6 +25,7 @@ pub enum AuditAction {
 impl AuditAction {
     pub fn as_str(&self) -> &'static str {
         match self {
+            AuditAction::OwnerClaim => "owner.claim",
             AuditAction::AuthLogin => "auth.login",
             AuditAction::AuthRefresh => "auth.refresh",
             AuditAction::AuthRevoke => "auth.revoke",
@@ -44,6 +46,7 @@ impl FromStr for AuditAction {
     type Err = CoreError;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
+            "owner.claim" => Ok(AuditAction::OwnerClaim),
             "auth.login" => Ok(AuditAction::AuthLogin),
             "auth.refresh" => Ok(AuditAction::AuthRefresh),
             "auth.revoke" => Ok(AuditAction::AuthRevoke),

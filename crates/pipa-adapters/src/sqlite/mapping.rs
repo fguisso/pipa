@@ -2,7 +2,9 @@ use std::str::FromStr;
 
 use pipa_core::audit::{AuditAction, AuditEvent};
 use pipa_core::comment::{Comment, CommentStatus};
-use pipa_core::device::{Device, DevicePairing, RefreshToken, Scope, SetupCode, StepUpToken};
+use pipa_core::device::{
+    Admin, Device, DevicePairing, OwnerSession, RefreshToken, Scope, SetupCode, StepUpToken,
+};
 use pipa_core::error::{CoreError, Result};
 use pipa_core::page::{Csp, Mode, Page, Visibility};
 use sqlx::Row;
@@ -125,6 +127,27 @@ pub fn step_up_from_row(row: &SqliteRow) -> Result<StepUpToken> {
         expires_at: get_i64(row, "expires_at")?,
         consumed_at: opt_i64(row, "consumed_at")?,
         confirmed_at: opt_i64(row, "confirmed_at")?,
+    })
+}
+
+pub fn admin_from_row(row: &SqliteRow) -> Result<Admin> {
+    Ok(Admin {
+        id: get(row, "id")?,
+        username: get(row, "username")?,
+        password_hash: get(row, "password_hash")?,
+        synthetic_device_id: get(row, "synthetic_device_id")?,
+        created_at: get_i64(row, "created_at")?,
+    })
+}
+
+pub fn owner_session_from_row(row: &SqliteRow) -> Result<OwnerSession> {
+    Ok(OwnerSession {
+        id: get(row, "id")?,
+        created_at: get_i64(row, "created_at")?,
+        last_seen_at: opt_i64(row, "last_seen_at")?,
+        user_agent: opt(row, "user_agent")?,
+        ip: opt(row, "ip")?,
+        revoked_at: opt_i64(row, "revoked_at")?,
     })
 }
 

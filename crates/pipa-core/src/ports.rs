@@ -3,7 +3,7 @@ use bytes::Bytes;
 
 use crate::audit::AuditEvent;
 use crate::comment::{Comment, CommentStatus, NewComment};
-use crate::device::{Device, RefreshToken, Scope, SetupCode, StepUpToken};
+use crate::device::{Admin, Device, OwnerSession, RefreshToken, Scope, SetupCode, StepUpToken};
 use crate::error::Result;
 use crate::hit::NewHit;
 use crate::page::{NewPage, Page, PageStats};
@@ -145,4 +145,28 @@ pub trait AuthStore: Send + Sync {
     /// Fetch a single device by id. Used by the confirmation page to render
     /// the requesting device's human label.
     async fn get_device(&self, id: &str) -> Result<Option<Device>>;
+
+    // owner sessions (browser-side claim of server ownership)
+    async fn owner_sessions_count(&self) -> Result<u64>;
+    async fn create_owner_session(
+        &self,
+        user_agent: Option<&str>,
+        ip: Option<&str>,
+    ) -> Result<OwnerSession>;
+    async fn find_owner_session(&self, id: &str) -> Result<Option<OwnerSession>>;
+    async fn touch_owner_session(&self, id: &str) -> Result<()>;
+    async fn list_owner_sessions(&self) -> Result<Vec<OwnerSession>>;
+    async fn revoke_owner_session(&self, id: &str) -> Result<()>;
+
+    // admin user (single-row, Phase 1 single-owner)
+    async fn count_admins(&self) -> Result<u64>;
+    /// Create the admin row + its synthetic "Admin Web UI" device in one
+    /// transaction. Fails with `AlreadyExists` when an admin already exists.
+    async fn create_admin(&self, username: &str, password_hash: &str) -> Result<Admin>;
+    async fn find_admin_by_username(&self, username: &str) -> Result<Option<Admin>>;
+    async fn get_admin(&self) -> Result<Option<Admin>>;
+    /// Delete the admin row + revoke its synthetic device. Used by
+    /// `pipa-server reset-claim` to allow a fresh `/setup` to create a new
+    /// admin from scratch.
+    async fn delete_admin(&self) -> Result<()>;
 }

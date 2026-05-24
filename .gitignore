@@ -1,0 +1,22 @@
+# Rust
+/target/
+**/*.rs.bk
+Cargo.lock.bak
+
+# Runtime data
+/data/
+/pages/
+
+# Local secrets / env
+.env
+.env.local
+*.key
+*.pem
+
+# IDE / OS
+.DS_Store
+.idea/
+.vscode/
+
+# Claude Code local — design docs and per-user state live here, never committed
+/.claude/

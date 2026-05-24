@@ -1,0 +1,17 @@
+[package]
+name = "pipa-sdk"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+repository.workspace = true
+license = "Apache-2.0"
+description = "pipa HTTP API client library"
+
+[dependencies]
+anyhow.workspace = true
+bytes.workspace = true
+reqwest.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true

@@ -1,0 +1,94 @@
+# pipa server configuration (Phase 1).
+#
+# Copy this file to ./pages.toml (the default search path) or pass
+# --config /path/to/pages.toml. All sections have sensible defaults — every
+# field below is optional, but spelled out so you know the knobs that exist.
+
+[server]
+# HTTP bind address. The server is HTTP-only by design; put Caddy / nginx /
+# Cloudflare Tunnel in front of it in production.
+addr = "127.0.0.1:8080"
+
+# Public-facing URL, used in the first-boot banner and (later) in deploy
+# response payloads. No trailing slash.
+public_url = "http://127.0.0.1:8080"
+
+# Where SQLite lives (`db.sqlite`), plus key material (`.keys/hmac.key`) and
+# the first-boot `.setup-code` drop. chmod 600 on the key + setup code is
+# enforced on Unix.
+data_dir = "./data"
+
+# Where deployed page bundles live (`./pages/<uuid>/`), with `.staging/` for
+# in-flight uploads and `.trash/` for the previous version pending GC.
+pages_dir = "./pages"
+
+# The reverse proxy IP we trust to set `X-Forwarded-For`. Requests from any
+# other source IP get their peer address used as-is. Set to your proxy's IP
+# (often "127.0.0.1" when the proxy lives on the same host).
+trusted_proxy = "127.0.0.1"
+
+# Set to true (or pass --dev / PIPA_DEV=1) to relax the cookie Secure flag
+# for local development. The server refuses to bind a non-loopback address
+# in dev mode.
+dev = false
+
+[hosting]
+# Hard cap on deploy archive size. 100 MB is the default; raise carefully —
+# the unpacked tree will live in `pages_dir` and counts against disk quotas.
+max_upload_bytes = 104857600
+
+# `spa` falls back missing files to `/index.html` (client-side routing);
+# `static` returns 404 for them.
+default_mode = "spa"
+
+[analytics]
+# Either "daily" or "weekly". Controls how often the IP-hash salt rotates;
+# more rotation = better unlinkability but loses unique-visitor counts across
+# the boundary.
+ip_salt_rotation = "daily"
+
+# Hits older than this are eligible for GC. The actual sweep happens on a
+# background job (M5).
+retention_days = 90
+
+[admin]
+# Whether to mount the (M7) HTMX admin UI under [admin.ui_path].
+ui_enabled = true
+ui_path = "/admin"
+
+[auth]
+# Refresh-token lifetime (90 days). Refresh tokens are stored hashed and
+# rotated on every use.
+refresh_ttl_days = 90
+
+# Access tokens are short-lived (5 minutes default). They live only in CLI
+# memory and are sent as `Authorization: Bearer …`.
+access_ttl_seconds = 300
+
+# Step-up tokens (for destructive operations) are even shorter-lived and
+# single-use. See SECURITY.md §3.
+step_up_ttl_seconds = 300
+
+# First-boot setup code TTL — also used by `pipa-server setup`.
+setup_code_ttl_minutes = 15
+
+[auth.notifications]
+# Optional webhooks fired on sensitive auth events. Leave commented out to
+# disable.
+# webhook_on_stepup = "https://hooks.example.com/stepup"
+# webhook_on_device_register = "https://hooks.example.com/device"
+email_on_device_register = false
+
+[comments]
+# Master switch. Comments arrive in M4; the server already wires up the
+# storage in M2.
+enabled = true
+max_author_length = 64
+max_body_length = 2000
+
+# When true, new comments default to `pending` and need owner approval.
+default_require_approval = false
+
+# CORS-ish: either "same-origin" (default) or a comma-separated list of
+# origins permitted to embed the comments widget.
+allowed_origins = "same-origin"

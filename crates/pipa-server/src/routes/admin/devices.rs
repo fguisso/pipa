@@ -19,6 +19,7 @@ struct DevicesTemplate<'a> {
     show_nav: bool,
     tokens_json: String,
     self_device_json: String,
+    ui_path_json: String,
 }
 
 pub async fn devices_page(
@@ -32,12 +33,14 @@ pub async fn devices_page(
             return (StatusCode::INTERNAL_SERVER_ERROR, "internal error").into_response();
         }
     };
+    let path = ui_path(&state);
     let tmpl = DevicesTemplate {
-        ui_path: ui_path(&state),
+        ui_path: path,
         show_nav: true,
         tokens_json: tokens.to_json(),
         self_device_json: serde_json::to_string(&session.device.id)
             .unwrap_or_else(|_| "\"\"".to_string()),
+        ui_path_json: serde_json::to_string(path).unwrap_or_else(|_| "\"/admin\"".to_string()),
     };
     render(tmpl)
 }

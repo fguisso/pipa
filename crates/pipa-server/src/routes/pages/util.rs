@@ -32,6 +32,7 @@ pub struct PageView {
     pub comments_enabled: bool,
     pub comments_require_approval: bool,
     pub csp: String,
+    pub archived: bool,
     pub created_at: i64,
     pub updated_at: i64,
 }
@@ -50,6 +51,7 @@ impl From<&Page> for PageView {
             comments_enabled: p.comments_enabled,
             comments_require_approval: p.comments_require_approval,
             csp: p.csp.as_str().to_string(),
+            archived: p.archived,
             created_at: p.created_at,
             updated_at: p.updated_at,
         }

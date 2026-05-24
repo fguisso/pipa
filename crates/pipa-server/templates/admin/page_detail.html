@@ -93,17 +93,70 @@
           </table>
         </section>
 
+        <section class="gpa-card">
+          <h2>archive</h2>
+          <p class="gpa-muted">
+            archiving 404s the public URL but keeps every file on disk —
+            unarchive later to put it back online with the same uuid.
+          </p>
+          <div class="gpa-row" style="margin-top:0.5rem">
+            <template x-if="!page.archived">
+              <button class="gpa-btn" @click="toggleArchive(true)" :disabled="busy">
+                archive
+              </button>
+            </template>
+            <template x-if="page.archived">
+              <button class="gpa-btn" @click="toggleArchive(false)" :disabled="busy">
+                unarchive
+              </button>
+            </template>
+            <template x-if="page.archived">
+              <span class="gpa-pill gpa-pill--archived">archived</span>
+            </template>
+          </div>
+        </section>
+
         <section class="gpa-card gpa-card--danger">
           <h2>delete page</h2>
           <p class="gpa-muted">
-            deleting a page is irreversible and requires step-up confirmation.
-            run from your trusted CLI:
+            permanently removes every file from disk, drops stats + comments.
+            no undo. prefer <strong>archive</strong> above if there's any
+            chance you'll want this back.
           </p>
-          <div class="gpa-codecopy">
-            <code x-text="'pipa rm ' + page.uuid"></code>
-            <button @click="copy('pipa rm ' + page.uuid)" class="gpa-btn gpa-btn--ghost">copy</button>
-          </div>
+          <button class="gpa-btn gpa-btn--danger" @click="deleteOpen = true" :disabled="busy">
+            delete this page…
+          </button>
         </section>
+      </div>
+    </template>
+
+    <!-- Delete confirm modal — mirrors the dashboard wording. -->
+    <template x-if="deleteOpen && page">
+      <div class="gpa-modal-overlay" @click.self="deleteOpen = false">
+        <div class="gpa-modal gpa-modal--danger" role="dialog" aria-modal="true">
+          <h3>delete <strong x-text="page.name || 'this page'"></strong>?</h3>
+          <p>
+            this wipes every file, view stat, and comment for the page.
+            <strong>you can't undo it.</strong>
+          </p>
+          <p>
+            not sure? <strong>archive</strong> takes it offline (visitors
+            see "not found") but keeps the files — you can republish in one
+            click later.
+          </p>
+          <code class="gpa-mono" x-text="page.uuid"></code>
+          <div class="gpa-row">
+            <button class="gpa-btn gpa-btn--ghost" @click="deleteOpen = false" :disabled="busy">cancel</button>
+            <button class="gpa-btn"
+                    @click="toggleArchive(true); deleteOpen = false"
+                    :disabled="busy || page.archived">
+              archive instead
+            </button>
+            <button class="gpa-btn gpa-btn--danger" @click="confirmDelete()" :disabled="busy">
+              yes, delete forever
+            </button>
+          </div>
+        </div>
       </div>
     </template>
   </section>
@@ -123,6 +176,7 @@
       comments: [],
       commentsLoading: false,
       busy: false,
+      deleteOpen: false,
       error: '',
       gpa: window.gpa,
       async hydrate() {
@@ -182,6 +236,27 @@
           this.comments = this.comments.filter(c => c.id !== id);
         } catch (e) { this.error = String(e); }
         finally { this.busy = false; }
+      },
+      async toggleArchive(archived) {
+        this.busy = true; this.error = '';
+        try {
+          const updated = await gpa.apiJson(
+            '/api/admin/pages/' + this.page.uuid + '/archive',
+            'POST', { archived }
+          );
+          this.page = updated || { ...this.page, archived };
+        } catch (e) { this.error = String(e); }
+        finally { this.busy = false; }
+      },
+      async confirmDelete() {
+        const uuid = this.page.uuid;
+        this.busy = true; this.error = '';
+        try {
+          await gpa.apiJson('/api/admin/pages/' + uuid, 'DELETE', null);
+          this.deleteOpen = false;
+          // Bounce back to the dashboard so the row disappears.
+          window.location = window.__PIPA_UI_PATH || '/admin';
+        } catch (e) { this.error = String(e); this.busy = false; }
       },
       copy(text) {
         navigator.clipboard?.writeText(text);

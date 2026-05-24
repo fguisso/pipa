@@ -109,6 +109,8 @@ pub struct Page {
     pub comments_enabled: bool,
     pub comments_require_approval: bool,
     pub csp: Csp,
+    /// Soft-unpublished: serving layer 404s, files preserved on disk.
+    pub archived: bool,
     pub created_at: i64,
     pub updated_at: i64,
 }

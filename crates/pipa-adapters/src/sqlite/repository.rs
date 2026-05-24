@@ -106,6 +106,23 @@ impl Repository for SqliteRepository {
         self.find_page(&p.uuid).await?.ok_or(CoreError::NotFound)
     }
 
+    async fn set_page_archived(&self, uuid: &str, archived: bool) -> Result<()> {
+        let now = self.clock.now();
+        let res = sqlx::query(
+            "UPDATE pages SET archived = ?, updated_at = ? WHERE uuid = ?",
+        )
+        .bind(archived as i64)
+        .bind(now)
+        .bind(uuid)
+        .execute(&self.pool)
+        .await
+        .map_err(db)?;
+        if res.rows_affected() == 0 {
+            return Err(CoreError::NotFound);
+        }
+        Ok(())
+    }
+
     async fn find_page(&self, uuid: &str) -> Result<Option<Page>> {
         let row = sqlx::query("SELECT * FROM pages WHERE uuid = ?")
             .bind(uuid)

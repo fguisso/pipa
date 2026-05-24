@@ -12,6 +12,7 @@ mod activity;
 mod assets;
 mod dashboard;
 mod devices;
+mod page_actions;
 mod pages;
 mod session;
 
@@ -34,4 +35,5 @@ pub fn router(state: &AppState) -> Router<AppState> {
         .route(&format!("{path}/activity"), get(activity::activity_page))
         .route(&format!("{path}/assets/*path"), get(assets::serve_asset))
         .route("/api/audit/recent", get(activity::recent_audit_json))
+        .merge(page_actions::router())
 }

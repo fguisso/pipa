@@ -33,6 +33,7 @@ pub fn page_from_row(row: &SqliteRow) -> Result<Page> {
         comments_enabled: get_i64(row, "comments_enabled")? != 0,
         comments_require_approval: get_i64(row, "comments_require_approval")? != 0,
         csp: Csp::from_str(&csp_s)?,
+        archived: get_i64(row, "archived")? != 0,
         created_at: get_i64(row, "created_at")?,
         updated_at: get_i64(row, "updated_at")?,
     })

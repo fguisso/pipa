@@ -37,6 +37,9 @@ pub trait Repository: Send + Sync {
     async fn find_page(&self, uuid: &str) -> Result<Option<Page>>;
     async fn list_pages(&self, owner_kind: &str, owner_id: &str) -> Result<Vec<Page>>;
     async fn delete_page(&self, uuid: &str) -> Result<()>;
+    /// Flip the `archived` flag. Doesn't touch files or visibility; the
+    /// serving layer's 404 check is the single source of truth.
+    async fn set_page_archived(&self, uuid: &str, archived: bool) -> Result<()>;
 
     // hits
     async fn record_hit(&self, h: NewHit) -> Result<()>;

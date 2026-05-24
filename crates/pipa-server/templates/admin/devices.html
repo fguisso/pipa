@@ -3,12 +3,19 @@
 {% block title %}devices — admin{% endblock %}
 
 {% block content %}
+  {% include "partials/icons.html" %}
   <section x-data="devicesView()" x-init="hydrate()" class="gpa-stack">
     <h1>devices</h1>
+    <p class="gpa-muted">
+      every CLI install that ran <code>pipa login</code> shows up here.
+      revoking a device immediately invalidates its refresh token so future
+      <code>pipa</code> commands from that machine fail.
+    </p>
+
     <div x-show="error" class="gpa-error" x-text="error"></div>
     <p x-show="loading" class="gpa-muted">loading…</p>
 
-    <table class="gpa-table" x-show="!loading && devices.length > 0">
+    <table class="gpa-table" x-show="!loading && visible.length > 0">
       <thead>
         <tr>
           <th>id</th>
@@ -17,32 +24,30 @@
           <th>created</th>
           <th>last seen</th>
           <th>status</th>
-          <th></th>
+          <th class="gpa-actions-col"></th>
         </tr>
       </thead>
       <tbody>
-        <template x-for="d in devices" :key="d.id">
+        <template x-for="d in visible" :key="d.id">
           <tr :class="d.revoked_at ? 'gpa-row--muted' : ''">
-            <td class="gpa-mono" x-text="d.id.slice(0, 12)"></td>
+            <td class="gpa-mono" :title="d.id" x-text="d.id.slice(0, 12)"></td>
             <td x-text="d.label"></td>
             <td x-text="d.scope"></td>
             <td x-text="gpa.fmtTime(d.created_at)"></td>
             <td x-text="d.last_seen_at ? gpa.fmtTime(d.last_seen_at) : '—'"></td>
             <td>
-              <span class="gpa-pill" :class="d.revoked_at ? 'gpa-pill--revoked' : 'gpa-pill--active'"
+              <span class="gpa-pill"
+                    :class="d.revoked_at ? 'gpa-pill--revoked' : 'gpa-pill--active'"
                     x-text="d.revoked_at ? 'revoked' : 'active'"></span>
             </td>
-            <td>
-              <template x-if="!d.revoked_at && isSelf(d.id)">
-                <button class="gpa-btn gpa-btn--xs gpa-btn--danger" @click="revokeSelf(d.id)" :disabled="busy">
-                  revoke (self)
+            <td class="gpa-actions">
+              <template x-if="!d.revoked_at">
+                <button class="gpa-icon-btn gpa-icon-btn--danger"
+                        @click="openRevokeModal(d)"
+                        :disabled="busyId === d.id"
+                        title="revoke device" aria-label="revoke device">
+                  <svg><use href="#icon-trash" /></svg>
                 </button>
-              </template>
-              <template x-if="!d.revoked_at && !isSelf(d.id)">
-                <div class="gpa-codecopy gpa-codecopy--inline">
-                  <code x-text="'pipa devices revoke ' + d.id"></code>
-                  <button @click="copy('pipa devices revoke ' + d.id)" class="gpa-btn gpa-btn--ghost gpa-btn--xs">copy</button>
-                </div>
               </template>
             </td>
           </tr>
@@ -50,12 +55,34 @@
       </tbody>
     </table>
 
-    <p x-show="!loading && devices.length === 0" class="gpa-muted">no devices.</p>
+    <p x-show="!loading && visible.length === 0" class="gpa-muted">no devices.</p>
 
-    <p class="gpa-muted">
-      revoking another device requires step-up confirmation (a second device / phone).
-      use the CLI command shown beside each row.
-    </p>
+    <!-- Revoke confirm modal. -->
+    <template x-if="revokeTarget">
+      <div class="gpa-modal-overlay" @click.self="revokeTarget = null">
+        <div class="gpa-modal gpa-modal--danger" role="dialog" aria-modal="true">
+          <h3>revoke <strong x-text="revokeTarget.label"></strong>?</h3>
+          <p>
+            the next <code>pipa</code> command from that machine will fail
+            with "session no longer valid" and the user will need to run
+            <code>pipa login</code> again.
+          </p>
+          <p x-show="isSelf(revokeTarget.id)" class="gpa-error">
+            you're revoking <strong>this browser's session</strong> — you'll
+            be signed out immediately and bounced to the login screen.
+          </p>
+          <code class="gpa-mono" x-text="revokeTarget.id"></code>
+          <div class="gpa-row">
+            <button class="gpa-btn gpa-btn--ghost" @click="revokeTarget = null"
+                    :disabled="busyId === revokeTarget.id">cancel</button>
+            <button class="gpa-btn gpa-btn--danger" @click="confirmRevoke()"
+                    :disabled="busyId === revokeTarget.id">
+              revoke
+            </button>
+          </div>
+        </div>
+      </div>
+    </template>
   </section>
 {% endblock %}
 
@@ -63,14 +90,27 @@
 <script>
   window.__PIPA_ADMIN_TOKENS = {{ tokens_json|safe }};
   window.__PIPA_SELF_DEVICE  = {{ self_device_json|safe }};
+  window.__PIPA_UI_PATH      = {{ ui_path_json|safe }};
 </script>
 <script src="{{ ui_path }}/assets/admin.js"></script>
 <script>
   function devicesView() {
     return {
-      devices: [], loading: true, busy: false, error: '',
+      devices: [],
+      loading: true,
+      busyId: '',
+      revokeTarget: null,
+      error: '',
       gpa: window.gpa,
+      // The admin UI's synthetic "Admin Web UI" device is an implementation
+      // detail (it just exists so access tokens have a real `sub`). Hiding
+      // it keeps the list focused on what the user actually controls.
+      get visible() {
+        const self = window.__PIPA_SELF_DEVICE;
+        return this.devices.filter(d => d.id !== self);
+      },
       isSelf(id) { return id === window.__PIPA_SELF_DEVICE; },
+      openRevokeModal(d) { this.revokeTarget = d; },
       async hydrate() {
         try {
           const r = await gpa.apiGet('/api/devices', 'manage');
@@ -78,15 +118,18 @@
         } catch (e) { this.error = String(e); }
         finally { this.loading = false; }
       },
-      async revokeSelf(id) {
-        if (!window.confirm('log this device out?')) return;
-        this.busy = true;
+      async confirmRevoke() {
+        const target = this.revokeTarget;
+        if (!target) return;
+        this.busyId = target.id; this.error = '';
         try {
-          await gpa.apiJson('/api/devices/' + id, 'DELETE', null, 'manage');
-          window.location.href = window.__PIPA_UI_PATH ? window.__PIPA_UI_PATH + '/login' : '/admin/login';
-        } catch (e) { this.error = String(e); this.busy = false; }
-      },
-      copy(text) { navigator.clipboard?.writeText(text); }
+          await gpa.apiJson('/api/admin/devices/' + target.id, 'DELETE', null);
+          this.devices = this.devices.map(d =>
+            d.id === target.id ? { ...d, revoked_at: Math.floor(Date.now() / 1000) } : d);
+          this.revokeTarget = null;
+        } catch (e) { this.error = String(e); }
+        finally { this.busyId = ''; }
+      }
     };
   }
 </script>

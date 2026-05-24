@@ -137,6 +137,12 @@ async fn serve_inner(
         None => return Ok(not_found_response()),
     };
 
+    // Archived pages are soft-unpublished — 404 regardless of visibility so
+    // the bundle stops being addressable but stays on disk for un-archive.
+    if page.archived {
+        return Ok(not_found_response());
+    }
+
     match page.visibility {
         // TODO(phase-1-auth.md §sessions): once owner sessions are speced,
         // allow the owner cookie to browse private pages here. For now we

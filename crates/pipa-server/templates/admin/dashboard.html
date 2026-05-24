@@ -3,6 +3,7 @@
 {% block title %}dashboard — admin{% endblock %}
 
 {% block content %}
+  {% include "partials/icons.html" %}
   <section x-data="dashboard()" x-init="hydrate()" class="gpa-stack">
     <div class="gpa-row gpa-row--between">
       <h1>your pages</h1>
@@ -17,29 +18,58 @@
     <table class="gpa-table" x-show="pages.length > 0">
       <thead>
         <tr>
-          <th>uuid</th>
+          <th>id</th>
           <th>name</th>
           <th>mode</th>
-          <th>visibility</th>
+          <th>state</th>
           <th class="gpa-num">size</th>
           <th class="gpa-num">files</th>
           <th>updated</th>
-          <th></th>
+          <th class="gpa-actions-col"></th>
         </tr>
       </thead>
       <tbody>
         <template x-for="p in pages" :key="p.uuid">
-          <tr>
-            <td><a :href="pageHref(p.uuid)" class="gpa-mono" x-text="shortUuid(p.uuid)"></a></td>
+          <tr :class="p.archived ? 'gpa-row--archived' : ''">
+            <td><a :href="configHref(p.uuid)" class="gpa-mono" x-text="shortUuid(p.uuid)"
+                   :title="'configure ' + p.uuid"></a></td>
             <td x-text="p.name || '—'"></td>
             <td x-text="p.mode"></td>
             <td>
               <span class="gpa-pill" :class="'gpa-pill--' + p.visibility" x-text="p.visibility"></span>
+              <template x-if="p.archived">
+                <span class="gpa-pill gpa-pill--archived">archived</span>
+              </template>
             </td>
             <td class="gpa-num" x-text="fmtBytes(p.size_bytes)"></td>
             <td class="gpa-num" x-text="p.file_count"></td>
             <td x-text="fmtTime(p.updated_at)"></td>
-            <td><a :href="pageHref(p.uuid)" class="gpa-link">open</a></td>
+            <td class="gpa-actions">
+              <a class="gpa-icon-btn" :href="publicHref(p.uuid)" target="_blank" rel="noopener"
+                 title="open page in new tab" aria-label="open page">
+                <svg><use href="#icon-open" /></svg>
+              </a>
+              <template x-if="!p.archived">
+                <button class="gpa-icon-btn" @click="toggleArchive(p, true)"
+                        :disabled="busyUuid === p.uuid"
+                        title="archive (unpublish, keep files)" aria-label="archive">
+                  <svg><use href="#icon-archive" /></svg>
+                </button>
+              </template>
+              <template x-if="p.archived">
+                <button class="gpa-icon-btn" @click="toggleArchive(p, false)"
+                        :disabled="busyUuid === p.uuid"
+                        title="unarchive (republish)" aria-label="unarchive">
+                  <svg><use href="#icon-unarchive" /></svg>
+                </button>
+              </template>
+              <button class="gpa-icon-btn gpa-icon-btn--danger"
+                      @click="openDeleteModal(p)"
+                      :disabled="busyUuid === p.uuid"
+                      title="delete permanently" aria-label="delete">
+                <svg><use href="#icon-trash" /></svg>
+              </button>
+            </td>
           </tr>
         </template>
       </tbody>
@@ -72,6 +102,38 @@
         </template>
       </tbody>
     </table>
+
+    <!-- Delete confirm modal — prompts archive as the safer default. -->
+    <template x-if="deleteTarget">
+      <div class="gpa-modal-overlay" @click.self="deleteTarget = null">
+        <div class="gpa-modal gpa-modal--danger" role="dialog" aria-modal="true">
+          <h3>delete <strong x-text="deleteTarget.name || 'this page'"></strong>?</h3>
+          <p>
+            this wipes every file, view stat, and comment for the page.
+            <strong>you can't undo it.</strong>
+          </p>
+          <p>
+            not sure? <strong>archive</strong> takes it offline (visitors
+            see "not found") but keeps the files — you can republish in one
+            click later.
+          </p>
+          <code class="gpa-mono" x-text="deleteTarget.uuid"></code>
+          <div class="gpa-row">
+            <button class="gpa-btn gpa-btn--ghost" @click="deleteTarget = null"
+                    :disabled="busyUuid === deleteTarget.uuid">cancel</button>
+            <button class="gpa-btn"
+                    @click="toggleArchive(deleteTarget, true); deleteTarget = null"
+                    :disabled="busyUuid === deleteTarget.uuid || deleteTarget.archived">
+              archive instead
+            </button>
+            <button class="gpa-btn gpa-btn--danger" @click="confirmDelete()"
+                    :disabled="busyUuid === deleteTarget.uuid">
+              yes, delete forever
+            </button>
+          </div>
+        </div>
+      </div>
+    </template>
   </section>
 {% endblock %}
 
@@ -92,8 +154,11 @@
       pages: boot.pages || [],
       events: boot.events || [],
       loading: false,
+      busyUuid: '',
+      deleteTarget: null,
       error: '',
-      pageHref(u) { return boot.ui_path + '/pages/' + u; },
+      configHref(u) { return boot.ui_path + '/pages/' + u; },
+      publicHref(u) { return '/p/' + u + '/'; },
       shortUuid(u) { return (u || '').slice(0, 10); },
       fmtBytes: gpa.fmtBytes,
       fmtTime: gpa.fmtTime,
@@ -110,6 +175,32 @@
           this.events = audit.events || [];
         } catch (e) { this.error = String(e); }
         finally { this.loading = false; }
+      },
+      openDeleteModal(p) {
+        this.deleteTarget = p;
+      },
+      async toggleArchive(page, archived) {
+        this.busyUuid = page.uuid; this.error = '';
+        try {
+          const updated = await gpa.apiJson(
+            '/api/admin/pages/' + page.uuid + '/archive',
+            'POST', { archived }
+          );
+          this.pages = this.pages.map(p =>
+            p.uuid === page.uuid ? (updated || { ...p, archived }) : p);
+        } catch (e) { this.error = String(e); }
+        finally { this.busyUuid = ''; }
+      },
+      async confirmDelete() {
+        const target = this.deleteTarget;
+        if (!target) return;
+        this.busyUuid = target.uuid; this.error = '';
+        try {
+          await gpa.apiJson('/api/admin/pages/' + target.uuid, 'DELETE', null);
+          this.pages = this.pages.filter(p => p.uuid !== target.uuid);
+          this.deleteTarget = null;
+        } catch (e) { this.error = String(e); }
+        finally { this.busyUuid = ''; }
       }
     };
   }

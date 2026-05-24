@@ -1,0 +1,18 @@
+[package]
+name = "gapes-core"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+repository.workspace = true
+license = "AGPL-3.0-or-later"
+description = "Core business logic for gapes (no I/O)"
+
+[dependencies]
+anyhow.workspace = true
+async-trait.workspace = true
+bytes.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+time.workspace = true
+ulid.workspace = true

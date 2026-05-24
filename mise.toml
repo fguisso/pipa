@@ -1,0 +1,34 @@
+[tools]
+rust = "1.94"
+
+[env]
+RUST_BACKTRACE = "1"
+DATABASE_URL = "sqlite://./data/db.sqlite"
+
+[tasks.dev]
+description = "Run the server with auto-reload"
+run = "cargo watch -x 'run -p gapes-server'"
+
+[tasks.check]
+description = "Type-check the whole workspace"
+run = "cargo check --workspace --all-targets"
+
+[tasks.test]
+description = "Run all tests"
+run = "cargo test --workspace"
+
+[tasks.lint]
+description = "Lint with clippy (warnings as errors)"
+run = "cargo clippy --workspace --all-targets -- -D warnings"
+
+[tasks.fmt]
+description = "Format the workspace"
+run = "cargo fmt --all"
+
+[tasks.db-create]
+description = "Create the SQLite database file"
+run = "mkdir -p data && sqlx database create"
+
+[tasks.db-migrate]
+description = "Apply migrations"
+run = "sqlx migrate run --source crates/gapes-adapters/migrations"

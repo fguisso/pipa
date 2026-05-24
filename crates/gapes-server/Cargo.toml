@@ -1,0 +1,48 @@
+[package]
+name = "gapes-server"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+repository.workspace = true
+license = "AGPL-3.0-or-later"
+description = "gapes HTTP server"
+
+[[bin]]
+name = "gapes-server"
+path = "src/main.rs"
+
+[dependencies]
+gapes-core = { path = "../gapes-core" }
+gapes-adapters = { path = "../gapes-adapters" }
+
+ammonia.workspace = true
+anyhow.workspace = true
+argon2.workspace = true
+askama.workspace = true
+axum.workspace = true
+bytes.workspace = true
+pulldown-cmark.workspace = true
+qrcode.workspace = true
+rust-embed.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sqlx.workspace = true
+thiserror.workspace = true
+time.workspace = true
+tokio.workspace = true
+toml.workspace = true
+tower.workspace = true
+tower-http.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+ulid.workspace = true
+
+[features]
+default = []
+# Phase 5 toggles, not implemented yet:
+multi-tenant = []
+pg = []
+s3 = []
+redis = []
+billing = []

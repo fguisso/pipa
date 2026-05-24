@@ -1,0 +1,28 @@
+[package]
+name = "gapes-cli"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+repository.workspace = true
+license = "AGPL-3.0-or-later"
+description = "gapes command-line client"
+
+[[bin]]
+name = "gapes"
+path = "src/main.rs"
+
+[dependencies]
+gapes-sdk = { path = "../gapes-sdk" }
+
+anyhow.workspace = true
+clap.workspace = true
+keyring.workspace = true
+qrcode.workspace = true
+reqwest.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+toml.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true

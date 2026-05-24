@@ -4,6 +4,7 @@ use gapes_adapters::{Config, HmacKey};
 use gapes_core::{AuthStore, Repository, Storage};
 
 use crate::ip_hash::SaltStore;
+use crate::middleware::rate_limit::CommentLimiter;
 
 pub type DynRepository = Arc<dyn Repository>;
 pub type DynAuthStore = Arc<dyn AuthStore>;
@@ -20,6 +21,7 @@ pub struct AppState {
     pub hmac_key: HmacKey,
     pub config: Arc<Config>,
     pub salts: Arc<SaltStore>,
+    pub comment_limiter: Arc<CommentLimiter>,
 }
 
 impl AppState {
@@ -37,6 +39,7 @@ impl AppState {
             hmac_key,
             config: Arc::new(config),
             salts: Arc::new(SaltStore::new()),
+            comment_limiter: Arc::new(CommentLimiter::new()),
         }
     }
 }

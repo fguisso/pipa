@@ -3,13 +3,20 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>{% block title %}admin — pages{% endblock %}</title>
+    <title>{% block title %}admin — pipa{% endblock %}</title>
+    <link rel="icon" type="image/svg+xml" href="{{ ui_path }}/assets/favicon.svg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Didact+Gothic&display=swap">
     <link rel="stylesheet" href="{{ ui_path }}/assets/admin.css" />
     <script defer src="{{ ui_path }}/assets/alpine.min.js"></script>
   </head>
   <body>
     <header class="gpa-header">
-      <a class="gpa-brand" href="{{ ui_path }}">pipa admin</a>
+      <a class="gpa-brand" href="{{ ui_path }}" aria-label="pipa admin">
+        {% include "partials/brand.html" %}
+        <span class="gpa-brand-label">admin</span>
+      </a>
       {% if show_nav %}
         <nav class="gpa-nav">
           <a href="{{ ui_path }}">pages</a>

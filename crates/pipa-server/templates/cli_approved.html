@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>device approved — pages</title>
+    <title>device approved — pipa</title>
     <style>
       :root { color-scheme: light dark; }
       html, body { margin: 0; padding: 0; height: 100%;
@@ -19,11 +19,17 @@
       p { margin: 0; color: #9aa3b2; font-size: 0.9rem; line-height: 1.5; }
       .label { margin-top: 0.85rem; color: #c9d0db;
         font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+      .gpa-brand-svg { display: block; margin: 0 auto 1rem; height: 1.85rem; width: auto; color: #e6e6e6; }
     </style>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Didact+Gothic&display=swap">
+    <link rel="icon" type="image/svg+xml" href="/admin/assets/favicon.svg" />
   </head>
   <body>
     <main>
       <div class="card">
+        {% include "partials/brand.html" %}
         <div class="ok">✓</div>
         <h1>device registered</h1>
         <p>return to your terminal — the CLI should pick up the session within a few seconds.</p>

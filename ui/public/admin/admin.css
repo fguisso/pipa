@@ -33,8 +33,11 @@ h1, h2, h3 { margin: 0 0 0.5rem; font-weight: 600; }
 h1 { font-size: 1.35rem; }
 h2 { font-size: 1.05rem; margin-top: 1.25rem; }
 h3 { font-size: 0.95rem; margin-top: 1rem; }
-.gpa-header { display: flex; justify-content: space-between; align-items: center; padding: 0.85rem 1.5rem; background: var(--bg-card); border-bottom: 1px solid var(--border); }
-.gpa-brand { color: var(--text); font-weight: 600; }
+.gpa-header { display: flex; justify-content: space-between; align-items: center; padding: 0.6rem 1.5rem; background: var(--bg-card); border-bottom: 1px solid var(--border); min-height: 3.25rem; }
+.gpa-brand { display: inline-flex; align-items: center; gap: 0.65rem; color: var(--text); font-weight: 600; text-decoration: none; }
+.gpa-brand:hover { text-decoration: none; }
+.gpa-brand-svg { height: 2.5rem; width: auto; color: var(--text); display: block; }
+.gpa-brand-label { font-size: 0.85rem; color: var(--text-muted); font-weight: 500; letter-spacing: 0.04em; text-transform: uppercase; padding-bottom: 0.2rem; }
 .gpa-nav { display: flex; align-items: center; gap: 1.25rem; }
 .gpa-nav a { color: var(--text-muted); font-size: 0.9rem; }
 .gpa-nav a:hover { color: var(--text); text-decoration: none; }

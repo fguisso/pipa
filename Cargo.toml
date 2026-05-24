@@ -48,7 +48,7 @@ zip = "2"
 # Phase 1 specific
 argon2 = "0.5"
 askama = "0.12"
-keyring = "3"
+keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service", "crypto-rust"] }
 rust-embed = { version = "8", features = ["debug-embed"] }
 qrcode = "0.14"
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "stream", "multipart"] }
@@ -56,6 +56,16 @@ reqwest = { version = "0.12", default-features = false, features = ["json", "rus
 # Comments
 ammonia = "4"
 pulldown-cmark = "0.12"
+
+# CLI specific
+dialoguer = "0.11"
+indicatif = "0.17"
+dirs = "5"
+which = "6"
+nu-ansi-term = "0.50"
+tabled = "0.15"
+url = "2"
+futures-util = "0.3"
 
 [profile.release]
 lto = "thin"

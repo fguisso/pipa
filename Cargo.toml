@@ -67,6 +67,9 @@ tabled = "0.15"
 url = "2"
 futures-util = "0.3"
 
+# Test-only
+tempfile = "3"
+
 [profile.release]
 lto = "thin"
 codegen-units = 1

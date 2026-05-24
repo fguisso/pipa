@@ -27,3 +27,7 @@ toml.workspace = true
 tracing.workspace = true
 ulid.workspace = true
 walkdir.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

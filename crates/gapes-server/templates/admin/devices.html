@@ -1,0 +1,93 @@
+{% extends "admin/base.html" %}
+
+{% block title %}devices — admin{% endblock %}
+
+{% block content %}
+  <section x-data="devicesView()" x-init="hydrate()" class="gpa-stack">
+    <h1>devices</h1>
+    <div x-show="error" class="gpa-error" x-text="error"></div>
+    <p x-show="loading" class="gpa-muted">loading…</p>
+
+    <table class="gpa-table" x-show="!loading && devices.length > 0">
+      <thead>
+        <tr>
+          <th>id</th>
+          <th>label</th>
+          <th>scope</th>
+          <th>created</th>
+          <th>last seen</th>
+          <th>status</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        <template x-for="d in devices" :key="d.id">
+          <tr :class="d.revoked_at ? 'gpa-row--muted' : ''">
+            <td class="gpa-mono" x-text="d.id.slice(0, 12)"></td>
+            <td x-text="d.label"></td>
+            <td x-text="d.scope"></td>
+            <td x-text="gpa.fmtTime(d.created_at)"></td>
+            <td x-text="d.last_seen_at ? gpa.fmtTime(d.last_seen_at) : '—'"></td>
+            <td>
+              <span class="gpa-pill" :class="d.revoked_at ? 'gpa-pill--revoked' : 'gpa-pill--active'"
+                    x-text="d.revoked_at ? 'revoked' : 'active'"></span>
+            </td>
+            <td>
+              <template x-if="!d.revoked_at && isSelf(d.id)">
+                <button class="gpa-btn gpa-btn--xs gpa-btn--danger" @click="revokeSelf(d.id)" :disabled="busy">
+                  revoke (self)
+                </button>
+              </template>
+              <template x-if="!d.revoked_at && !isSelf(d.id)">
+                <div class="gpa-codecopy gpa-codecopy--inline">
+                  <code x-text="'gapes devices revoke ' + d.id"></code>
+                  <button @click="copy('gapes devices revoke ' + d.id)" class="gpa-btn gpa-btn--ghost gpa-btn--xs">copy</button>
+                </div>
+              </template>
+            </td>
+          </tr>
+        </template>
+      </tbody>
+    </table>
+
+    <p x-show="!loading && devices.length === 0" class="gpa-muted">no devices.</p>
+
+    <p class="gpa-muted">
+      revoking another device requires step-up confirmation (a second device / phone).
+      use the CLI command shown beside each row.
+    </p>
+  </section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  window.__GAPES_ADMIN_TOKENS = {{ tokens_json|safe }};
+  window.__GAPES_SELF_DEVICE  = {{ self_device_json|safe }};
+</script>
+<script src="{{ ui_path }}/assets/admin.js"></script>
+<script>
+  function devicesView() {
+    return {
+      devices: [], loading: true, busy: false, error: '',
+      gpa: window.gpa,
+      isSelf(id) { return id === window.__GAPES_SELF_DEVICE; },
+      async hydrate() {
+        try {
+          const r = await gpa.apiGet('/api/devices', 'manage');
+          this.devices = r.devices || [];
+        } catch (e) { this.error = String(e); }
+        finally { this.loading = false; }
+      },
+      async revokeSelf(id) {
+        if (!window.confirm('log this device out?')) return;
+        this.busy = true;
+        try {
+          await gpa.apiJson('/api/devices/' + id, 'DELETE', null, 'manage');
+          window.location.href = window.__GAPES_UI_PATH ? window.__GAPES_UI_PATH + '/login' : '/admin/login';
+        } catch (e) { this.error = String(e); this.busy = false; }
+      },
+      copy(text) { navigator.clipboard?.writeText(text); }
+    };
+  }
+</script>
+{% endblock %}

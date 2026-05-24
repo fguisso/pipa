@@ -3,6 +3,7 @@ use axum::Router;
 use crate::middleware::headers::SecurityHeadersLayer;
 use crate::state::AppState;
 
+pub mod admin;
 pub mod auth;
 pub mod comments;
 pub mod devices;
@@ -17,7 +18,7 @@ pub mod stubs;
 ///   - real auth + devices routes (M3)
 ///   - real `/api/pages*` routes (M4)
 ///   - real `/api/comments*` + widget routes (M5)
-///   - remaining stubs for the admin UI (M7) returning 501
+///   - admin web UI (M7) under `[admin] ui_path`
 ///
 /// Global hardening headers are applied here; the page CSP is applied as a
 /// per-route layer inside `public::router()`.
@@ -29,6 +30,7 @@ pub fn router(state: AppState) -> Router {
         .merge(devices::router())
         .merge(pages::router(&state))
         .merge(comments::router())
+        .merge(admin::router(&state))
         .merge(stubs::router())
         .layer(SecurityHeadersLayer)
         .with_state(state)

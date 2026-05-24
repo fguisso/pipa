@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{% block title %}admin — pages{% endblock %}</title>
+    <link rel="stylesheet" href="{{ ui_path }}/assets/admin.css" />
+    <script defer src="{{ ui_path }}/assets/alpine.min.js"></script>
+  </head>
+  <body>
+    <header class="gpa-header">
+      <a class="gpa-brand" href="{{ ui_path }}">gapes admin</a>
+      {% if show_nav %}
+        <nav class="gpa-nav">
+          <a href="{{ ui_path }}">pages</a>
+          <a href="{{ ui_path }}/devices">devices</a>
+          <a href="{{ ui_path }}/activity">activity</a>
+          <form method="post" action="{{ ui_path }}/logout" class="gpa-logout">
+            <button type="submit">logout</button>
+          </form>
+        </nav>
+      {% endif %}
+    </header>
+    <main class="gpa-main">
+      {% block content %}{% endblock %}
+    </main>
+    {% block scripts %}{% endblock %}
+  </body>
+</html>

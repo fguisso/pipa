@@ -1,0 +1,192 @@
+{% extends "admin/base.html" %}
+
+{% block title %}page {{ uuid_short }} — admin{% endblock %}
+
+{% block content %}
+  <section x-data="pageDetail()" x-init="hydrate()" class="gpa-stack">
+    <a href="{{ ui_path }}" class="gpa-link">← back to pages</a>
+
+    <h1>page <span class="gpa-mono">{{ uuid }}</span></h1>
+
+    <div x-show="error" class="gpa-error" x-text="error"></div>
+    <div x-show="!page" class="gpa-muted">loading…</div>
+
+    <template x-if="page">
+      <div class="gpa-stack">
+        <div class="gpa-row gpa-row--wrap">
+          <div class="gpa-stat"><span class="gpa-stat-k">name</span><span x-text="page.name || '—'"></span></div>
+          <div class="gpa-stat"><span class="gpa-stat-k">mode</span><span x-text="page.mode"></span></div>
+          <div class="gpa-stat"><span class="gpa-stat-k">visibility</span>
+            <span class="gpa-pill" :class="'gpa-pill--' + page.visibility" x-text="page.visibility"></span>
+          </div>
+          <div class="gpa-stat"><span class="gpa-stat-k">size</span><span x-text="gpa.fmtBytes(page.size_bytes)"></span></div>
+          <div class="gpa-stat"><span class="gpa-stat-k">files</span><span x-text="page.file_count"></span></div>
+          <div class="gpa-stat"><span class="gpa-stat-k">updated</span><span x-text="gpa.fmtTime(page.updated_at)"></span></div>
+        </div>
+
+        <section class="gpa-card">
+          <h2>visibility</h2>
+          <p class="gpa-muted">
+            switch to <strong>private</strong> or <strong>password</strong> directly.
+            making a page <strong>public</strong> is destructive — use the CLI:
+          </p>
+          <div class="gpa-codecopy">
+            <code x-text="'gapes share ' + page.uuid + ' --public'"></code>
+            <button @click="copy('gapes share ' + page.uuid + ' --public')" class="gpa-btn gpa-btn--ghost">copy</button>
+          </div>
+          <div class="gpa-row gpa-row--wrap" style="margin-top:0.85rem">
+            <button class="gpa-btn" @click="setVisibility('private')"
+                    :disabled="busy || page.visibility === 'private'">make private</button>
+            <button class="gpa-btn" @click="promptPassword()" :disabled="busy">
+              set password
+            </button>
+          </div>
+        </section>
+
+        <section class="gpa-card">
+          <h2>comments</h2>
+          <label class="gpa-checkbox">
+            <input type="checkbox" :checked="page.comments_enabled" @change="toggleComments($event.target.checked, page.comments_require_approval)" />
+            comments enabled
+          </label>
+          <label class="gpa-checkbox" :class="{ 'gpa-disabled': !page.comments_enabled }">
+            <input type="checkbox" :checked="page.comments_require_approval"
+                   :disabled="!page.comments_enabled"
+                   @change="toggleComments(page.comments_enabled, $event.target.checked)" />
+            require approval before publishing
+          </label>
+
+          <h3>moderation queue</h3>
+          <div x-show="commentsLoading" class="gpa-muted">loading comments…</div>
+          <p x-show="!commentsLoading && comments.length === 0" class="gpa-muted">
+            no comments yet.
+          </p>
+          <table class="gpa-table" x-show="comments.length > 0">
+            <thead>
+              <tr>
+                <th>when</th>
+                <th>status</th>
+                <th>author</th>
+                <th>body</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              <template x-for="c in comments" :key="c.id">
+                <tr>
+                  <td x-text="gpa.fmtTime(c.ts)"></td>
+                  <td>
+                    <span class="gpa-pill" :class="'gpa-pill--c-' + c.status" x-text="c.status"></span>
+                  </td>
+                  <td x-text="c.author"></td>
+                  <td class="gpa-cell-md" x-text="c.body_md"></td>
+                  <td>
+                    <button class="gpa-btn gpa-btn--xs" @click="setStatus(c.id, 'visible')"
+                            :disabled="busy || c.status === 'visible'">approve</button>
+                    <button class="gpa-btn gpa-btn--xs" @click="setStatus(c.id, 'hidden')"
+                            :disabled="busy || c.status === 'hidden'">hide</button>
+                    <button class="gpa-btn gpa-btn--xs gpa-btn--danger" @click="deleteComment(c.id)" :disabled="busy">delete</button>
+                  </td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </section>
+
+        <section class="gpa-card gpa-card--danger">
+          <h2>delete page</h2>
+          <p class="gpa-muted">
+            deleting a page is irreversible and requires step-up confirmation.
+            run from your trusted CLI:
+          </p>
+          <div class="gpa-codecopy">
+            <code x-text="'gapes rm ' + page.uuid"></code>
+            <button @click="copy('gapes rm ' + page.uuid)" class="gpa-btn gpa-btn--ghost">copy</button>
+          </div>
+        </section>
+      </div>
+    </template>
+  </section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  window.__GAPES_ADMIN_TOKENS = {{ tokens_json|safe }};
+  window.__GAPES_PAGE_UUID = {{ uuid_json|safe }};
+  window.__GAPES_UI_PATH = {{ ui_path_json|safe }};
+</script>
+<script src="{{ ui_path }}/assets/admin.js"></script>
+<script>
+  function pageDetail() {
+    return {
+      page: null,
+      comments: [],
+      commentsLoading: false,
+      busy: false,
+      error: '',
+      gpa: window.gpa,
+      async hydrate() {
+        try {
+          this.page = await gpa.apiGet('/api/pages/' + window.__GAPES_PAGE_UUID, 'read');
+          await this.loadComments();
+        } catch (e) { this.error = String(e); }
+      },
+      async loadComments() {
+        this.commentsLoading = true;
+        try {
+          const r = await gpa.apiGet('/api/pages/' + window.__GAPES_PAGE_UUID + '/comments/moderation', 'admin');
+          this.comments = r.comments || [];
+        } catch (e) { /* no comments enabled etc. */ this.comments = []; }
+        finally { this.commentsLoading = false; }
+      },
+      async setVisibility(v) {
+        this.busy = true; this.error = '';
+        try {
+          this.page = await gpa.apiJson('/api/pages/' + this.page.uuid + '/visibility', 'POST', { visibility: v }, 'admin');
+        } catch (e) { this.error = String(e); }
+        finally { this.busy = false; }
+      },
+      async promptPassword() {
+        const pw = window.prompt('new password (min 8 chars):');
+        if (!pw) return;
+        this.busy = true; this.error = '';
+        try {
+          this.page = await gpa.apiJson('/api/pages/' + this.page.uuid + '/visibility', 'POST',
+            { visibility: 'password', password: pw }, 'admin');
+        } catch (e) { this.error = String(e); }
+        finally { this.busy = false; }
+      },
+      async toggleComments(enabled, requireApproval) {
+        this.busy = true; this.error = '';
+        try {
+          const r = await gpa.apiJson('/api/pages/' + this.page.uuid + '/comments-config', 'POST',
+            { enabled, require_approval: requireApproval }, 'admin');
+          this.page = r.page;
+          await this.loadComments();
+        } catch (e) { this.error = String(e); }
+        finally { this.busy = false; }
+      },
+      async setStatus(id, status) {
+        this.busy = true; this.error = '';
+        try {
+          const updated = await gpa.apiJson('/api/comments/' + id, 'PATCH', { status }, 'admin');
+          this.comments = this.comments.map(c => c.id === id ? { ...c, ...updated } : c);
+        } catch (e) { this.error = String(e); }
+        finally { this.busy = false; }
+      },
+      async deleteComment(id) {
+        if (!window.confirm('delete this comment?')) return;
+        this.busy = true; this.error = '';
+        try {
+          await gpa.apiJson('/api/comments/' + id, 'DELETE', null, 'admin');
+          this.comments = this.comments.filter(c => c.id !== id);
+        } catch (e) { this.error = String(e); }
+        finally { this.busy = false; }
+      },
+      copy(text) {
+        navigator.clipboard?.writeText(text);
+      }
+    };
+  }
+</script>
+{% endblock %}

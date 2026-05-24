@@ -34,6 +34,13 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 ulid = { version = "1", features = ["serde"] }
 
+# Crypto / encoding shared between adapters and (later) other crates
+rand = "0.8"
+sha2 = "0.10"
+hex = "0.4"
+walkdir = "2"
+chacha20poly1305 = "0.10"
+
 # Phase 1 specific
 argon2 = "0.5"
 askama = "0.12"

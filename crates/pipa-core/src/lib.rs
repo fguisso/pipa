@@ -8,6 +8,9 @@ pub mod page;
 pub mod ports;
 pub mod time;
 
+#[cfg(test)]
+mod tests;
+
 pub use audit::{AuditAction, AuditEvent};
 pub use comment::{Comment, CommentStatus, NewComment};
 pub use device::{

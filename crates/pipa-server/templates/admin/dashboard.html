@@ -1,0 +1,117 @@
+{% extends "admin/base.html" %}
+
+{% block title %}dashboard — admin{% endblock %}
+
+{% block content %}
+  <section x-data="dashboard()" x-init="hydrate()" class="gpa-stack">
+    <div class="gpa-row gpa-row--between">
+      <h1>your pages</h1>
+      <button @click="refresh()" :disabled="loading" class="gpa-btn">
+        <span x-show="!loading">refresh</span>
+        <span x-show="loading">loading…</span>
+      </button>
+    </div>
+
+    <div x-show="error" class="gpa-error" x-text="error"></div>
+
+    <table class="gpa-table" x-show="pages.length > 0">
+      <thead>
+        <tr>
+          <th>uuid</th>
+          <th>name</th>
+          <th>mode</th>
+          <th>visibility</th>
+          <th class="gpa-num">size</th>
+          <th class="gpa-num">files</th>
+          <th>updated</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        <template x-for="p in pages" :key="p.uuid">
+          <tr>
+            <td><a :href="pageHref(p.uuid)" class="gpa-mono" x-text="shortUuid(p.uuid)"></a></td>
+            <td x-text="p.name || '—'"></td>
+            <td x-text="p.mode"></td>
+            <td>
+              <span class="gpa-pill" :class="'gpa-pill--' + p.visibility" x-text="p.visibility"></span>
+            </td>
+            <td class="gpa-num" x-text="fmtBytes(p.size_bytes)"></td>
+            <td class="gpa-num" x-text="p.file_count"></td>
+            <td x-text="fmtTime(p.updated_at)"></td>
+            <td><a :href="pageHref(p.uuid)" class="gpa-link">open</a></td>
+          </tr>
+        </template>
+      </tbody>
+    </table>
+
+    <p x-show="!loading && pages.length === 0" class="gpa-muted">
+      no pages yet — deploy one with <code>pipa deploy ./dist</code>.
+    </p>
+
+    <h2>recent activity</h2>
+    <table class="gpa-table" x-show="events.length > 0">
+      <thead>
+        <tr>
+          <th>when</th>
+          <th>action</th>
+          <th>actor</th>
+          <th>target</th>
+          <th>scope</th>
+        </tr>
+      </thead>
+      <tbody>
+        <template x-for="e in events" :key="e.ts + '-' + (e.action || '') + '-' + (e.target || '')">
+          <tr :class="e.success === false ? 'gpa-row--err' : ''">
+            <td x-text="fmtTime(e.ts)"></td>
+            <td class="gpa-mono" x-text="e.action"></td>
+            <td class="gpa-mono" x-text="e.actor"></td>
+            <td class="gpa-mono" x-text="e.target || '—'"></td>
+            <td class="gpa-mono" x-text="e.scope || '—'"></td>
+          </tr>
+        </template>
+      </tbody>
+    </table>
+  </section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  window.__PIPA_ADMIN_TOKENS = {{ tokens_json|safe }};
+  window.__PIPA_ADMIN_BOOTSTRAP = {
+    pages: {{ pages_json|safe }},
+    events: {{ events_json|safe }},
+    ui_path: {{ ui_path_json|safe }}
+  };
+</script>
+<script src="{{ ui_path }}/assets/admin.js"></script>
+<script>
+  function dashboard() {
+    const boot = window.__PIPA_ADMIN_BOOTSTRAP;
+    return {
+      pages: boot.pages || [],
+      events: boot.events || [],
+      loading: false,
+      error: '',
+      pageHref(u) { return boot.ui_path + '/pages/' + u; },
+      shortUuid(u) { return (u || '').slice(0, 10); },
+      fmtBytes: gpa.fmtBytes,
+      fmtTime: gpa.fmtTime,
+      hydrate() {},
+      async refresh() {
+        this.loading = true; this.error = '';
+        try {
+          const [pages, audit] = await Promise.all([
+            gpa.apiGet('/api/pages', 'read'),
+            gpa.apiGet('/api/audit/recent?limit=50', 'manage')
+              .catch(() => ({ events: [] }))
+          ]);
+          this.pages = pages.pages || [];
+          this.events = audit.events || [];
+        } catch (e) { this.error = String(e); }
+        finally { this.loading = false; }
+      }
+    };
+  }
+</script>
+{% endblock %}

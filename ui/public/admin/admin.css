@@ -1,0 +1,88 @@
+:root {
+  color-scheme: dark light;
+  --bg: #0f1115;
+  --bg-card: #161922;
+  --bg-soft: #1c2030;
+  --border: #262a36;
+  --border-soft: #1f2330;
+  --text: #e6e6e6;
+  --text-muted: #9aa3b2;
+  --text-faint: #777f8c;
+  --accent: #4a73ff;
+  --accent-hover: #3a63ef;
+  --danger: #ff7676;
+  --danger-hover: #e85c5c;
+  --ok: #4ade80;
+  --warn: #ffb86c;
+  --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg: #f7f8fa; --bg-card: #ffffff; --bg-soft: #eef0f5;
+    --border: #d6dae3; --border-soft: #e3e6ee;
+    --text: #111418; --text-muted: #4a5260; --text-faint: #6a7382;
+  }
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text); font-family: var(--sans); font-size: 15px; line-height: 1.5; }
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+code, .gpa-mono { font-family: var(--mono); }
+h1, h2, h3 { margin: 0 0 0.5rem; font-weight: 600; }
+h1 { font-size: 1.35rem; }
+h2 { font-size: 1.05rem; margin-top: 1.25rem; }
+h3 { font-size: 0.95rem; margin-top: 1rem; }
+.gpa-header { display: flex; justify-content: space-between; align-items: center; padding: 0.85rem 1.5rem; background: var(--bg-card); border-bottom: 1px solid var(--border); }
+.gpa-brand { color: var(--text); font-weight: 600; }
+.gpa-nav { display: flex; align-items: center; gap: 1.25rem; }
+.gpa-nav a { color: var(--text-muted); font-size: 0.9rem; }
+.gpa-nav a:hover { color: var(--text); text-decoration: none; }
+.gpa-logout { margin: 0; }
+.gpa-logout button { background: transparent; color: var(--text-muted); border: 1px solid var(--border); padding: 0.3rem 0.65rem; border-radius: 6px; font-size: 0.82rem; cursor: pointer; }
+.gpa-logout button:hover { color: var(--text); border-color: var(--text-faint); }
+.gpa-main { max-width: 1100px; margin: 0 auto; padding: 1.5rem; }
+.gpa-stack > * + * { margin-top: 1rem; }
+.gpa-row { display: flex; gap: 0.85rem; align-items: center; }
+.gpa-row--wrap { flex-wrap: wrap; }
+.gpa-row--between { justify-content: space-between; }
+.gpa-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; padding: 1.1rem 1.25rem; }
+.gpa-card--narrow { max-width: 420px; margin: 2.5rem auto; }
+.gpa-card--danger { border-color: rgba(255, 118, 118, 0.35); }
+.gpa-muted { color: var(--text-muted); font-size: 0.88rem; margin: 0.5rem 0; }
+.gpa-form { display: flex; flex-direction: column; gap: 0.5rem; margin-top: 1rem; }
+.gpa-form label { font-size: 0.78rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; }
+input[type=text], input[type=password] { width: 100%; padding: 0.55rem 0.7rem; background: var(--bg-soft); color: var(--text); border: 1px solid var(--border); border-radius: 6px; font-family: var(--mono); font-size: 0.9rem; }
+input[type=text]:focus, input[type=password]:focus { outline: none; border-color: var(--accent); }
+.gpa-btn { background: var(--accent); color: white; border: 0; padding: 0.5rem 0.85rem; border-radius: 6px; font-size: 0.88rem; cursor: pointer; }
+.gpa-btn:hover:not(:disabled) { background: var(--accent-hover); }
+.gpa-btn:disabled { opacity: 0.55; cursor: not-allowed; }
+.gpa-btn--ghost { background: transparent; color: var(--text-muted); border: 1px solid var(--border); }
+.gpa-btn--ghost:hover:not(:disabled) { color: var(--text); background: var(--bg-soft); }
+.gpa-btn--danger { background: var(--danger); }
+.gpa-btn--danger:hover:not(:disabled) { background: var(--danger-hover); }
+.gpa-btn--xs { padding: 0.25rem 0.55rem; font-size: 0.78rem; margin-right: 0.25rem; }
+.gpa-error { background: rgba(255, 118, 118, 0.1); color: var(--danger); border: 1px solid rgba(255, 118, 118, 0.3); padding: 0.55rem 0.75rem; border-radius: 6px; font-size: 0.85rem; }
+.gpa-link { color: var(--accent); font-size: 0.85rem; }
+.gpa-table { width: 100%; border-collapse: collapse; background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.gpa-table th, .gpa-table td { padding: 0.55rem 0.75rem; text-align: left; font-size: 0.85rem; border-bottom: 1px solid var(--border-soft); }
+.gpa-table th { color: var(--text-faint); font-weight: 500; text-transform: uppercase; font-size: 0.72rem; letter-spacing: 0.05em; background: var(--bg-soft); }
+.gpa-table tr:last-child td { border-bottom: 0; }
+.gpa-num { text-align: right; font-variant-numeric: tabular-nums; }
+.gpa-row--err td { color: var(--danger); }
+.gpa-row--muted td { color: var(--text-faint); }
+.gpa-cell-md { max-width: 28rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gpa-pill { display: inline-block; padding: 0.1rem 0.45rem; border-radius: 999px; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; background: var(--bg-soft); color: var(--text-muted); border: 1px solid var(--border); }
+.gpa-pill--public { color: var(--warn); border-color: rgba(255, 184, 108, 0.4); }
+.gpa-pill--private { color: var(--text-muted); }
+.gpa-pill--password { color: var(--accent); border-color: rgba(74, 115, 255, 0.4); }
+.gpa-pill--active, .gpa-pill--c-visible { color: var(--ok); border-color: rgba(74, 222, 128, 0.35); }
+.gpa-pill--revoked, .gpa-pill--c-hidden { color: var(--text-faint); }
+.gpa-pill--c-pending { color: var(--warn); border-color: rgba(255, 184, 108, 0.4); }
+.gpa-stat { display: flex; flex-direction: column; gap: 0.15rem; min-width: 7rem; }
+.gpa-stat-k { font-size: 0.7rem; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.05em; }
+.gpa-codecopy { display: flex; align-items: center; gap: 0.5rem; background: var(--bg-soft); padding: 0.45rem 0.7rem; border-radius: 6px; border: 1px solid var(--border); }
+.gpa-codecopy--inline { padding: 0.2rem 0.4rem; }
+.gpa-codecopy code { font-size: 0.82rem; flex: 1; }
+.gpa-checkbox { display: flex; align-items: center; gap: 0.55rem; font-size: 0.9rem; margin: 0.45rem 0; cursor: pointer; }
+.gpa-checkbox.gpa-disabled { opacity: 0.55; cursor: not-allowed; }

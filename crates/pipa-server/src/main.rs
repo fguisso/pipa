@@ -2,14 +2,7 @@ use anyhow::Result;
 use clap::Parser;
 use tracing_subscriber::EnvFilter;
 
-mod auth;
-mod cli;
-mod error;
-mod ip_hash;
-mod middleware;
-mod routes;
-mod serve;
-mod state;
+use pipa_server::{cli, serve};
 
 #[tokio::main]
 async fn main() -> Result<()> {

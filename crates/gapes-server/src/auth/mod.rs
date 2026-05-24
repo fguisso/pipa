@@ -8,10 +8,13 @@
 //! existing `HmacKey` and domain-separated with `"access-token/v1/"`.
 
 pub mod extractor;
+pub mod owner_cookie;
 pub mod scope;
 pub mod tokens;
 
 pub use extractor::AuthClaims;
+#[allow(unused_imports)]
+pub use owner_cookie::{OwnerCookie, OwnerCookieOpt};
 #[allow(unused_imports)]
 pub use scope::{ScopeRef, check_scope, parse_scope};
 #[allow(unused_imports)]

@@ -20,6 +20,9 @@ pub struct Cli {
 
 #[derive(Debug, Subcommand)]
 pub enum Command {
-    /// Issue a fresh setup code for first-boot or re-pairing a device.
-    Setup,
+    /// Revoke every owner session so a different browser can re-claim the
+    /// server via `/setup`. Use when you lost access to the original browser
+    /// (cookie wiped, device gone). Does NOT revoke CLI devices — they keep
+    /// working with their refresh tokens.
+    ResetClaim,
 }

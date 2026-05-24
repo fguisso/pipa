@@ -11,6 +11,7 @@ mod confirm_page;
 mod device_flow;
 mod logout;
 mod mint;
+mod setup_page;
 mod stepup;
 
 pub fn router() -> Router<AppState> {
@@ -21,6 +22,7 @@ pub fn router() -> Router<AppState> {
         .route("/api/auth/logout", post(logout::logout))
         .route("/api/auth/stepup-init", post(stepup::stepup_init))
         .route("/api/auth/stepup-status", post(stepup::stepup_status))
+        .route("/setup", get(setup_page::setup_get).post(setup_page::setup_post))
         .route("/cli", get(cli_page::cli_get).post(cli_page::cli_post))
         .route(
             "/confirm/:code",

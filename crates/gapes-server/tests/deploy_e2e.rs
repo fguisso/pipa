@@ -1,7 +1,8 @@
 //! End-to-end deploy flow exercised purely over HTTP. We follow the same
-//! happy path a fresh user would: setup-code on first boot, pair a CLI
-//! device, mint a deploy token, upload a zip, fetch it back from the public
-//! serving URL, flip visibility, and finally delete with step-up.
+//! happy path a fresh user would: claim the server via /setup, pair a CLI
+//! device from the browser, mint a deploy token, upload a zip, fetch it back
+//! from the public serving URL, flip visibility, and finally delete with
+//! step-up.
 
 mod common;
 
@@ -13,16 +14,32 @@ use crate::common::{make_zip_with_index, mint_access, spawn_test_server};
 #[tokio::test(flavor = "multi_thread")]
 async fn full_round_trip() {
     let server = spawn_test_server().await;
-    let client = reqwest::Client::new();
+    // Cookie store enabled so the /setup POST's gapes_owner cookie is replayed
+    // on subsequent requests (the browser side of the flow).
+    let client = reqwest::Client::builder()
+        .cookie_store(true)
+        .redirect(reqwest::redirect::Policy::none())
+        .build()
+        .expect("reqwest client");
     let base = server.base();
 
-    // ── 1. First-boot setup code ─────────────────────────────────────────
-    let setup = server
-        .state
-        .auth
-        .issue_setup_code()
+    // ── 1. Browser creates the admin user (first-boot wizard) ────────────
+    let resp = client
+        .post(format!("{base}/setup"))
+        .form(&[
+            ("username", "ci-admin"),
+            ("password", "test-password-1"),
+            ("password_confirm", "test-password-1"),
+            ("next", "/"),
+        ])
+        .send()
         .await
-        .expect("setup code");
+        .expect("setup post");
+    assert!(
+        matches!(resp.status().as_u16(), 200 | 302 | 303),
+        "setup expected 2xx/3xx, got {}",
+        resp.status()
+    );
 
     // ── 2. CLI begins pairing ────────────────────────────────────────────
     let resp = client
@@ -36,13 +53,12 @@ async fn full_round_trip() {
     let device_code = init["device_code"].as_str().expect("device_code").to_string();
     let device_secret = init["device_secret"].as_str().expect("device_secret").to_string();
 
-    // ── 3. Browser POSTs /cli to approve ─────────────────────────────────
+    // ── 3. Browser POSTs /cli to approve (owner cookie already set) ──────
     let resp = client
         .post(format!("{base}/cli"))
         .form(&[
             ("device_code", device_code.as_str()),
             ("label", "Test CI"),
-            ("setup_code", setup.code.as_str()),
             ("scope", "interactive"),
         ])
         .send()

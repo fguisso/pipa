@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>already initialized — gapes</title>
+    <style>
+      :root { color-scheme: light dark; }
+      html, body { margin: 0; padding: 0; height: 100%;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          "Helvetica Neue", Arial, sans-serif;
+        background: #0f1115; color: #e6e6e6; }
+      main { min-height: 100%; display: grid; place-items: center; padding: 2rem; }
+      .card { width: 100%; max-width: 460px; background: #161922;
+        border: 1px solid #262a36; border-radius: 12px; padding: 1.75rem;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.35); }
+      h1 { margin: 0 0 0.5rem; font-size: 1.1rem; font-weight: 600; }
+      p  { margin: 0 0 0.85rem; color: #9aa3b2; font-size: 0.9rem; line-height: 1.55; }
+      code { background: #0f1218; padding: 0.1rem 0.4rem; border-radius: 5px;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 0.85rem; color: #c9d0db; }
+      .pill { display: inline-block; padding: 0.15rem 0.55rem;
+        background: #1f2330; color: #c9d0db; font-size: 0.72rem;
+        border-radius: 999px; letter-spacing: 0.04em; margin-bottom: 0.5rem; }
+      a.btn { display: inline-block; margin-top: 0.5rem; padding: 0.55rem 1rem;
+        background: #4a73ff; color: white; border-radius: 8px;
+        font-size: 0.9rem; font-weight: 600; text-decoration: none; }
+      a.btn:hover { background: #3a63ef; }
+      .gpa-brand-svg { display: block; margin: 0 auto 1.25rem; height: 2.25rem; width: auto; color: #e6e6e6; }
+    </style>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Didact+Gothic&display=swap">
+    <link rel="icon" type="image/svg+xml" href="/admin/assets/favicon.svg" />
+  </head>
+  <body>
+    <main>
+      <div class="card">
+        {% include "partials/brand.html" %}
+        {% if i_am_owner %}
+          <div class="pill">signed in</div>
+          <h1>you're signed in</h1>
+          <p>
+            this server already has an admin and your browser is recognized.
+            head to the admin UI to manage pages, devices, and activity.
+          </p>
+          <p><a class="btn" href="{{ admin_url }}">open admin</a></p>
+        {% else %}
+          <div class="pill">already initialized</div>
+          <h1>this server has an admin</h1>
+          <p>sign in with the admin credentials to continue.</p>
+          <p><a class="btn" href="{{ admin_login_url }}">sign in</a></p>
+          <p>
+            forgot the credentials? run <code>gapes-server reset-claim</code>
+            on the host to wipe the admin and start fresh.
+          </p>
+        {% endif %}
+      </div>
+    </main>
+  </body>
+</html>

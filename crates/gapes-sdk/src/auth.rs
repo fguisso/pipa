@@ -11,34 +11,29 @@ use crate::models::{
 };
 
 impl Client {
-    /// Begin a device pairing. First-device callers pass `setup_code`;
-    /// subsequent devices pass an existing `manage:devices` access token via
-    /// `bearer` (the server requires one).
+    /// Begin a device pairing. Anonymous — the server gates approval on the
+    /// browser side via the owner cookie at `/cli`, so the CLI doesn't need
+    /// to authenticate to request a pairing code.
     pub async fn device_init(
         &self,
         scope: &str,
         client_label_hint: Option<&str>,
-        setup_code: Option<&str>,
-        bearer: Option<&str>,
     ) -> Result<DeviceInitResponse, SdkError> {
         #[derive(Serialize)]
         struct Body<'a> {
             scope: &'a str,
             #[serde(skip_serializing_if = "Option::is_none")]
             client_label_hint: Option<&'a str>,
-            #[serde(skip_serializing_if = "Option::is_none")]
-            setup_code: Option<&'a str>,
         }
         let body = Body {
             scope,
             client_label_hint,
-            setup_code,
         };
-        let mut req = self.req(Method::POST, "/api/auth/device-init")?;
-        if let Some(b) = bearer {
-            req = req.bearer_auth(b);
-        }
-        let resp = req.json(&body).send().await?;
+        let resp = self
+            .req(Method::POST, "/api/auth/device-init")?
+            .json(&body)
+            .send()
+            .await?;
         parse_json(resp).await
     }
 

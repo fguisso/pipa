@@ -10,6 +10,7 @@ pub mod devices;
 pub mod health;
 pub mod pages;
 pub mod public;
+pub mod root;
 pub mod stubs;
 
 /// Top-level router. Composes:
@@ -24,6 +25,7 @@ pub mod stubs;
 /// per-route layer inside `public::router()`.
 pub fn router(state: AppState) -> Router {
     Router::new()
+        .merge(root::router())
         .merge(public::router(state.clone()))
         .merge(health::router())
         .merge(auth::router())

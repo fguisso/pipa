@@ -52,7 +52,7 @@ ip_salt_rotation = "daily"
 retention_days = 90
 
 [admin]
-# Whether to mount the (M7) HTMX admin UI under [admin.ui_path].
+# Whether to mount the (M7) Alpine.js admin UI under [admin.ui_path].
 ui_enabled = true
 ui_path = "/admin"
 

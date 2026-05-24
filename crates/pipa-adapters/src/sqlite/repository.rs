@@ -44,8 +44,8 @@ impl Repository for SqliteRepository {
                 uuid, name, mode, visibility, password_hash,
                 owner_kind, owner_id, size_bytes, file_count,
                 comments_enabled, comments_require_approval,
-                created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?)
+                csp, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?)
             "#,
         )
         .bind(&p.uuid)
@@ -57,6 +57,7 @@ impl Repository for SqliteRepository {
         .bind(&p.owner_id)
         .bind(p.size_bytes as i64)
         .bind(p.file_count as i64)
+        .bind(p.csp.as_str())
         .bind(p.created_at)
         .bind(p.updated_at)
         .execute(&self.pool)
@@ -77,6 +78,7 @@ impl Repository for SqliteRepository {
                 name = ?, mode = ?, visibility = ?, password_hash = ?,
                 owner_kind = ?, owner_id = ?, size_bytes = ?, file_count = ?,
                 comments_enabled = ?, comments_require_approval = ?,
+                csp = ?,
                 updated_at = ?
             WHERE uuid = ?
             "#,
@@ -91,6 +93,7 @@ impl Repository for SqliteRepository {
         .bind(p.file_count as i64)
         .bind(p.comments_enabled as i64)
         .bind(p.comments_require_approval as i64)
+        .bind(p.csp.as_str())
         .bind(p.updated_at)
         .bind(&p.uuid)
         .execute(&self.pool)

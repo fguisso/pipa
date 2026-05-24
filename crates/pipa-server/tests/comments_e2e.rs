@@ -9,7 +9,7 @@ mod common;
 use std::fs;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use pipa_core::page::{Mode, NewPage, Visibility};
+use pipa_core::page::{Csp, Mode, NewPage, Visibility};
 use serde_json::{Value, json};
 
 use crate::common::{mint_access, spawn_test_server, TestServer};
@@ -38,6 +38,7 @@ async fn seed_public_page(server: &TestServer, uuid: &str) {
             owner_id: "local".into(),
             size_bytes: 32,
             file_count: 1,
+            csp: Csp::Strict,
             created_at: now_ts(),
             updated_at: now_ts(),
         })

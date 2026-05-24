@@ -4,7 +4,7 @@ use pipa_core::audit::{AuditAction, AuditEvent};
 use pipa_core::comment::{Comment, CommentStatus};
 use pipa_core::device::{Device, DevicePairing, RefreshToken, Scope, SetupCode, StepUpToken};
 use pipa_core::error::{CoreError, Result};
-use pipa_core::page::{Mode, Page, Visibility};
+use pipa_core::page::{Csp, Mode, Page, Visibility};
 use sqlx::Row;
 use sqlx::sqlite::SqliteRow;
 
@@ -15,6 +15,9 @@ pub fn page_from_row(row: &SqliteRow) -> Result<Page> {
     let visibility_s: String = row
         .try_get("visibility")
         .map_err(|e| CoreError::RepositoryFailure(format!("page.visibility: {e}")))?;
+    let csp_s: String = row
+        .try_get("csp")
+        .map_err(|e| CoreError::RepositoryFailure(format!("page.csp: {e}")))?;
     Ok(Page {
         uuid: get(row, "uuid")?,
         name: opt(row, "name")?,
@@ -27,6 +30,7 @@ pub fn page_from_row(row: &SqliteRow) -> Result<Page> {
         file_count: get_i64(row, "file_count")? as u64,
         comments_enabled: get_i64(row, "comments_enabled")? != 0,
         comments_require_approval: get_i64(row, "comments_require_approval")? != 0,
+        csp: Csp::from_str(&csp_s)?,
         created_at: get_i64(row, "created_at")?,
         updated_at: get_i64(row, "updated_at")?,
     })

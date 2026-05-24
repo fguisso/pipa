@@ -8,7 +8,7 @@ use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use pipa_adapters::hash_password;
-use pipa_core::page::{Mode, NewPage, Visibility};
+use pipa_core::page::{Csp, Mode, NewPage, Visibility};
 
 use crate::common::{spawn_test_server, TestServer};
 
@@ -27,6 +27,20 @@ async fn seed_page_with_index(
     mode: Mode,
     visibility: Visibility,
     password_plaintext: Option<&str>,
+) {
+    seed_page_with_index_csp(server, uuid, body, mode, visibility, password_plaintext, Csp::Strict)
+        .await;
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn seed_page_with_index_csp(
+    server: &TestServer,
+    uuid: &str,
+    body: &str,
+    mode: Mode,
+    visibility: Visibility,
+    password_plaintext: Option<&str>,
+    csp: Csp,
 ) {
     let pages_dir: PathBuf = server.data_root.path().join("pages");
     fs::create_dir_all(pages_dir.join(uuid)).expect("page dir");
@@ -48,6 +62,7 @@ async fn seed_page_with_index(
             owner_id: "local".into(),
             size_bytes: body.len() as u64,
             file_count: 1,
+            csp,
             created_at: now_ts(),
             updated_at: now_ts(),
         })
@@ -241,3 +256,119 @@ async fn password_page_gates_then_serves_with_cookie() {
     );
 }
 
+#[tokio::test(flavor = "multi_thread")]
+async fn redirect_no_trailing_slash() {
+    // GET /p/<uuid> (no trailing slash) must 308 → /p/<uuid>/, and preserve
+    // any query string. Without this the browser resolves relative URLs in
+    // index.html against the wrong parent and the CSS/JS 404s. See Bug A in
+    // the change log.
+    let server = spawn_test_server().await;
+    let uuid = "01HXYZTEST00000000PAGE0006";
+    seed_page_with_index(
+        &server,
+        uuid,
+        "<h1>hello</h1>",
+        Mode::Static,
+        Visibility::Public,
+        None,
+    )
+    .await;
+
+    let client = reqwest::Client::builder()
+        .redirect(reqwest::redirect::Policy::none())
+        .build()
+        .expect("client");
+
+    // No query.
+    let resp = client
+        .get(format!("{}/p/{}", server.base(), uuid))
+        .send()
+        .await
+        .expect("send");
+    assert_eq!(resp.status().as_u16(), 308, "expected 308 permanent redirect");
+    assert_eq!(
+        resp.headers()
+            .get(reqwest::header::LOCATION)
+            .and_then(|v| v.to_str().ok()),
+        Some(format!("/p/{uuid}/").as_str()),
+    );
+
+    // Query preserved.
+    let resp = client
+        .get(format!("{}/p/{}?ref=tweet&utm=x", server.base(), uuid))
+        .send()
+        .await
+        .expect("send");
+    assert_eq!(resp.status().as_u16(), 308);
+    assert_eq!(
+        resp.headers()
+            .get(reqwest::header::LOCATION)
+            .and_then(|v| v.to_str().ok()),
+        Some(format!("/p/{uuid}/?ref=tweet&utm=x").as_str()),
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn csp_off_omits_header() {
+    // A page with csp=off must not have the platform's CSP header on its
+    // responses — the page is expected to declare its own via <meta>.
+    let server = spawn_test_server().await;
+    let uuid = "01HXYZTEST00000000PAGE0007";
+    seed_page_with_index_csp(
+        &server,
+        uuid,
+        "<h1>csp off</h1>",
+        Mode::Static,
+        Visibility::Public,
+        None,
+        Csp::Off,
+    )
+    .await;
+
+    let client = reqwest::Client::new();
+    let resp = client
+        .get(format!("{}/p/{}/index.html", server.base(), uuid))
+        .send()
+        .await
+        .expect("send");
+    assert_eq!(resp.status().as_u16(), 200);
+    assert!(
+        resp.headers().get("content-security-policy").is_none(),
+        "csp=off must omit the content-security-policy header, got {:?}",
+        resp.headers().get("content-security-policy"),
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn csp_strict_still_emits_header() {
+    // Sibling assertion for the above — the default (strict) still emits the
+    // platform CSP header.
+    let server = spawn_test_server().await;
+    let uuid = "01HXYZTEST00000000PAGE0008";
+    seed_page_with_index_csp(
+        &server,
+        uuid,
+        "<h1>csp strict</h1>",
+        Mode::Static,
+        Visibility::Public,
+        None,
+        Csp::Strict,
+    )
+    .await;
+
+    let client = reqwest::Client::new();
+    let resp = client
+        .get(format!("{}/p/{}/index.html", server.base(), uuid))
+        .send()
+        .await
+        .expect("send");
+    assert_eq!(resp.status().as_u16(), 200);
+    assert!(
+        resp.headers()
+            .get("content-security-policy")
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("")
+            .contains("default-src"),
+        "csp=strict must emit the locked-down policy",
+    );
+}

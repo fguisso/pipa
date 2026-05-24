@@ -3,14 +3,14 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use askama::Template;
 use axum::Router;
 use axum::body::Body;
-use axum::extract::{Form, Path, State};
+use axum::extract::{Form, OriginalUri, Path, State};
 use axum::http::header::{HeaderMap, HeaderValue};
 use axum::http::{StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum_extra::extract::cookie::{Cookie, CookieJar, SameSite};
 use pipa_adapters::verify_password;
-use pipa_core::{Mode, NewHit, Page, Visibility};
+use pipa_core::{Csp, Mode, NewHit, Page, Visibility};
 use hmac::{Hmac, Mac};
 use serde::Deserialize;
 use sha2::Sha256;
@@ -18,7 +18,6 @@ use sha2::Sha256;
 use crate::error::ServerError;
 use crate::ip_hash::{hmac_ip, hmac_value};
 use crate::middleware::forwarded::RealIp;
-use crate::middleware::headers::PageCspLayer;
 use crate::state::AppState;
 
 type HmacSha256 = Hmac<Sha256>;
@@ -38,12 +37,50 @@ struct PasswordGateTemplate<'a> {
 }
 
 pub fn router(_state: AppState) -> Router<AppState> {
+    // Note: the previous incarnation of this router wrapped every response in
+    // `PageCspLayer` for defense-in-depth. We now emit the CSP header per
+    // response (only when `page.csp == Csp::Strict`) so the per-page `off`
+    // opt-out actually takes effect. `render_gate` always emits CSP — the
+    // gate is our HTML, not the page owner's, so it stays locked down.
     Router::new()
         .route("/p/:uuid/__gate", post(submit_gate))
-        .route("/p/:uuid", get(serve_root))
+        .route("/p/:uuid", get(redirect_to_trailing_slash))
         .route("/p/:uuid/", get(serve_root))
         .route("/p/:uuid/*path", get(serve_path))
-        .layer(PageCspLayer)
+}
+
+/// Bug A fix: relative URLs in `index.html` (e.g. `href="css/site.css"`) are
+/// resolved against the *parent* of the request URL. Without a trailing slash
+/// the browser asks for `/p/css/site.css` instead of `/p/<uuid>/css/site.css`,
+/// gets a 404, and refuses the asset under strict MIME. 308 keeps the method
+/// + body intact and is the correct redirect kind for a "this URL has moved"
+/// semantic.
+///
+/// We deliberately verify the page exists before redirecting: an unconditional
+/// 308 on `/p/<garbage>` would leak nothing meaningful but would still be a
+/// surprising answer to "is this a real URL" — 404 here matches what the
+/// canonical `/p/<uuid>/` endpoint would return for the same UUID.
+async fn redirect_to_trailing_slash(
+    State(state): State<AppState>,
+    Path(uuid): Path<String>,
+    OriginalUri(uri): OriginalUri,
+) -> Response {
+    match state.repo.find_page(&uuid).await {
+        Ok(Some(_)) => {}
+        _ => return not_found_response(),
+    }
+    let location = match uri.query() {
+        Some(q) if !q.is_empty() => format!("/p/{uuid}/?{q}"),
+        _ => format!("/p/{uuid}/"),
+    };
+    let mut resp = Response::builder()
+        .status(StatusCode::PERMANENT_REDIRECT)
+        .body(Body::empty())
+        .expect("static redirect");
+    if let Ok(v) = HeaderValue::from_str(&location) {
+        resp.headers_mut().insert(header::LOCATION, v);
+    }
+    resp
 }
 
 #[derive(Debug, Deserialize)]
@@ -183,12 +220,16 @@ async fn serve_file(
         .header(header::CONTENT_TYPE, mime)
         .body(Body::from(bytes))
         .map_err(|e| ServerError::Internal(anyhow::anyhow!("build response: {e}")))?;
-    // PageCspLayer adds CSP for the whole router, but we double-set here so
-    // an accidental layer removal still leaves the page hardened.
-    resp.headers_mut().insert(
-        "content-security-policy",
-        HeaderValue::from_static(crate::middleware::headers::PAGE_CSP),
-    );
+    // CSP is set per-response, gated by the page's `csp` knob: `Strict` (the
+    // default) emits the locked-down policy; `Off` lets the owner declare
+    // their own via `<meta http-equiv>` (necessary for sites loading CDN
+    // assets — see migration 0003).
+    if page.csp == Csp::Strict {
+        resp.headers_mut().insert(
+            "content-security-policy",
+            HeaderValue::from_static(crate::middleware::headers::PAGE_CSP),
+        );
+    }
     Ok(resp)
 }
 

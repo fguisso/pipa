@@ -19,7 +19,7 @@ pub use device::{
 pub use error::{CoreError, Result};
 pub use hit::{Hit, NewHit};
 pub use ids::{IdGen, UlidGen};
-pub use page::{Mode, NewPage, Page, PageStats, Visibility};
+pub use page::{Csp, Mode, NewPage, Page, PageStats, Visibility};
 pub use ports::{
     AuthStore, PollResult, PromotedInfo, RefreshTokenIssued, Repository, StagingHandle, Storage,
 };

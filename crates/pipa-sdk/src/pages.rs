@@ -59,6 +59,9 @@ impl Client {
         if let Some(v) = params.password {
             form = form.text("password", v);
         }
+        if let Some(v) = params.csp {
+            form = form.text("csp", v);
+        }
 
         let resp = self
             .req(Method::POST, "/api/pages")?
@@ -85,22 +88,27 @@ impl Client {
         parse_empty(resp).await
     }
 
-    /// `visibility` is one of `private | public | password`. `password` is
-    /// only consulted (and only required) when `visibility == "password"`.
-    /// `stepup_code` is required only when moving to `public`.
+    /// `visibility` is one of `private | public | password` (optional — pass
+    /// `None` if you only want to change `csp`). `password` is only consulted
+    /// (and only required) when `visibility == "password"`. `csp` is one of
+    /// `strict | off`. `stepup_code` is required only when moving to `public`.
     pub async fn set_visibility(
         &self,
         access: &str,
         uuid: &str,
-        visibility: &str,
+        visibility: Option<&str>,
         password: Option<&str>,
+        csp: Option<&str>,
         stepup_code: Option<&str>,
     ) -> Result<PageView, SdkError> {
         #[derive(Serialize)]
         struct Body<'a> {
-            visibility: &'a str,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            visibility: Option<&'a str>,
             #[serde(skip_serializing_if = "Option::is_none")]
             password: Option<&'a str>,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            csp: Option<&'a str>,
         }
         let mut req = self
             .req(Method::POST, &format!("/api/pages/{uuid}/visibility"))?
@@ -112,6 +120,7 @@ impl Client {
             .json(&Body {
                 visibility,
                 password,
+                csp,
             })
             .send()
             .await?;

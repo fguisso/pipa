@@ -81,6 +81,7 @@ pub async fn run(args: DeployArgs) -> Result<()> {
         name: args.name.clone(),
         visibility: args.visibility.clone(),
         password: args.password.clone(),
+        csp: args.csp.clone(),
     };
 
     let upload_pb = ProgressBar::new_spinner();
@@ -106,6 +107,7 @@ pub async fn run(args: DeployArgs) -> Result<()> {
     println!("{}", kv("files", &resp.file_count.to_string()));
     println!("{}", kv("mode", &resp.mode));
     println!("{}", kv("visibility", &resp.visibility));
+    println!("{}", kv("csp", &resp.csp));
     Ok(())
 }
 

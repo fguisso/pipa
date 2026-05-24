@@ -69,6 +69,12 @@ pub struct DeployArgs {
     /// Required if visibility=password.
     #[arg(long)]
     pub password: Option<String>,
+    /// Content-Security-Policy strictness. `strict` (default on create) emits
+    /// the platform's hardened CSP; `off` suppresses it so the page can load
+    /// CDN assets and declare its own policy via `<meta http-equiv>`. On
+    /// updates, omit to keep the existing value.
+    #[arg(long, value_parser = ["strict", "off"])]
+    pub csp: Option<String>,
 }
 
 #[derive(Debug, Args)]
@@ -92,6 +98,11 @@ pub struct ShareArgs {
     pub private: bool,
     #[arg(long)]
     pub password: Option<String>,
+    /// Per-page CSP knob: `strict` (default) emits the platform CSP, `off`
+    /// suppresses it. Non-destructive, no step-up. Can be passed alone or
+    /// alongside `--public`/`--private`/`--password`.
+    #[arg(long, value_parser = ["strict", "off"])]
+    pub csp: Option<String>,
 }
 
 #[derive(Debug, Args)]

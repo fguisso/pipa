@@ -18,8 +18,16 @@ pub struct PageView {
     pub comments_enabled: bool,
     #[serde(default)]
     pub comments_require_approval: bool,
+    /// `strict` (default) or `off`. Older servers omit this — `serde(default)`
+    /// makes the SDK forward-compatible by treating the absence as `strict`.
+    #[serde(default = "default_csp")]
+    pub csp: String,
     pub created_at: i64,
     pub updated_at: i64,
+}
+
+fn default_csp() -> String {
+    "strict".into()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -35,6 +43,8 @@ pub struct DeployResponse {
     pub file_count: u64,
     pub mode: String,
     pub visibility: String,
+    #[serde(default = "default_csp")]
+    pub csp: String,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -44,6 +54,7 @@ pub struct DeployParams {
     pub name: Option<String>,
     pub visibility: Option<String>,
     pub password: Option<String>,
+    pub csp: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]

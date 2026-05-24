@@ -63,6 +63,38 @@ impl FromStr for Visibility {
     }
 }
 
+/// Per-page CSP setting. `Strict` (default) emits the platform's hardened
+/// `Content-Security-Policy` header on every response. `Off` suppresses the
+/// header entirely so the page can declare its own policy via a
+/// `<meta http-equiv="Content-Security-Policy">` tag — necessary for sites
+/// that legitimately load assets from CDNs (React, Babel, icon fonts, …).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Csp {
+    Strict,
+    Off,
+}
+
+impl Csp {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Csp::Strict => "strict",
+            Csp::Off => "off",
+        }
+    }
+}
+
+impl FromStr for Csp {
+    type Err = CoreError;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "strict" => Ok(Csp::Strict),
+            "off" => Ok(Csp::Off),
+            other => Err(CoreError::InvalidInput(format!("unknown csp: {other}"))),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Page {
     pub uuid: String,
@@ -76,6 +108,7 @@ pub struct Page {
     pub file_count: u64,
     pub comments_enabled: bool,
     pub comments_require_approval: bool,
+    pub csp: Csp,
     pub created_at: i64,
     pub updated_at: i64,
 }
@@ -91,6 +124,7 @@ pub struct NewPage {
     pub owner_id: String,
     pub size_bytes: u64,
     pub file_count: u64,
+    pub csp: Csp,
     pub created_at: i64,
     pub updated_at: i64,
 }

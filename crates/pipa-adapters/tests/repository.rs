@@ -10,7 +10,7 @@ use pipa_adapters::SqliteRepository;
 use pipa_core::audit::{AuditAction, AuditEvent};
 use pipa_core::comment::{CommentStatus, NewComment};
 use pipa_core::hit::NewHit;
-use pipa_core::page::{Mode, NewPage, Visibility};
+use pipa_core::page::{Csp, Mode, NewPage, Visibility};
 use pipa_core::ports::Repository;
 
 use crate::common::{FakeClock, FakeIdGen, setup_in_memory_db};
@@ -26,6 +26,7 @@ fn sample_new_page(uuid: &str, ts: i64) -> NewPage {
         owner_id: "local".into(),
         size_bytes: 0,
         file_count: 0,
+        csp: Csp::Strict,
         created_at: ts,
         updated_at: ts,
     }

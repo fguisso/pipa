@@ -25,7 +25,7 @@ use bytes::Bytes;
 use pipa_adapters::hash_password;
 use pipa_core::audit::{AuditAction, AuditEvent};
 use pipa_core::ids::UlidGen;
-use pipa_core::page::{Mode, NewPage, Visibility};
+use pipa_core::page::{Csp, Mode, NewPage, Visibility};
 use pipa_core::ports::PromotedInfo;
 use pipa_core::{IdGen, Page};
 use serde::Serialize;
@@ -51,6 +51,7 @@ struct Form {
     name: Option<String>,
     visibility: Option<String>,
     password: Option<String>,
+    csp: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -61,6 +62,7 @@ pub struct DeployResponse {
     pub file_count: u64,
     pub mode: String,
     pub visibility: String,
+    pub csp: String,
 }
 
 pub async fn deploy(
@@ -142,6 +144,22 @@ pub async fn deploy(
             .unwrap_or(Visibility::Private),
     };
 
+    // CSP knob: explicit form field wins; on update we preserve the existing
+    // value; on create we default to `strict`. Bad value → 422.
+    let csp: Csp = match form.csp.as_deref() {
+        Some(s) => s.parse().map_err(|_| {
+            ApiError::new(
+                axum::http::StatusCode::UNPROCESSABLE_ENTITY,
+                "invalid_csp",
+                "csp must be strict|off",
+            )
+        })?,
+        None => existing
+            .as_ref()
+            .map(|p| p.csp)
+            .unwrap_or(Csp::Strict),
+    };
+
     // For visibility=password the password is mandatory on create or when
     // switching into password mode; if updating a page that is already
     // password-protected and the caller didn't re-supply the password, keep
@@ -197,6 +215,7 @@ pub async fn deploy(
         next.password_hash = password_hash;
         next.size_bytes = size_bytes;
         next.file_count = file_count;
+        next.csp = csp;
         next.updated_at = now;
         state.repo.update_page(next).await?
     } else {
@@ -212,6 +231,7 @@ pub async fn deploy(
                 owner_id: OWNER_ID_LOCAL.into(),
                 size_bytes,
                 file_count,
+                csp,
                 created_at: now,
                 updated_at: now,
             })
@@ -223,6 +243,7 @@ pub async fn deploy(
         "file_count": file_count,
         "mode": mode.as_str(),
         "visibility": visibility.as_str(),
+        "csp": csp.as_str(),
     })
     .to_string();
     let _ = state
@@ -256,6 +277,7 @@ pub async fn deploy(
         file_count,
         mode: mode.as_str().into(),
         visibility: visibility.as_str().into(),
+        csp: csp.as_str().into(),
     }))
 }
 
@@ -297,6 +319,7 @@ async fn read_form(mut multipart: Multipart, max_archive: u64) -> Result<Form, A
             "name" => form.name = Some(text(field).await?),
             "visibility" => form.visibility = Some(text(field).await?),
             "password" => form.password = Some(text(field).await?),
+            "csp" => form.csp = Some(text(field).await?),
             _ => {
                 // Drain unknown fields so the underlying stream is consumed.
                 let _ = field.bytes().await;

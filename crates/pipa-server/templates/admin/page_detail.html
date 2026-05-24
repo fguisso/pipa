@@ -56,6 +56,18 @@
             require approval before publishing
           </label>
 
+          <template x-if="page.comments_enabled">
+            <div class="gpa-callout">
+              <strong>heads up — we modify your HTML on the fly.</strong>
+              while comments are on, every HTML response for this page is
+              served with a <code>&lt;script&gt;</code> tag injected right
+              before <code>&lt;/body&gt;</code> that loads the comments
+              widget. your deployed files on disk are <em>not</em> touched —
+              flip this checkbox off and the next request gets the original
+              HTML back, byte for byte.
+            </div>
+          </template>
+
           <h3>moderation queue</h3>
           <div x-show="commentsLoading" class="gpa-muted">loading comments…</div>
           <p x-show="!commentsLoading && comments.length === 0" class="gpa-muted">

@@ -42,6 +42,7 @@ pub fn router() -> Router<AppState> {
             patch(moderation::patch_comment).delete(delete_route(moderation::delete_comment)),
         )
         .route("/api/comments/widget.js", get(widget::widget_js))
+        .route("/api/comments/widget.css", get(widget::widget_css))
 }
 
 #[derive(Debug, Deserialize)]

@@ -195,32 +195,13 @@
   }
 
   function injectStyles() {
+    // External stylesheet — inline <style> tags are blocked by the strict
+    // per-page CSP (`default-src 'self'` only allows external resources).
     if (document.getElementById("gpc-styles")) return;
-    const style = document.createElement("style");
-    style.id = "gpc-styles";
-    style.textContent = `
-      #pipa-comments { max-width: 720px; margin: 2rem auto; font: 14px/1.5 system-ui, sans-serif; color: #222; }
-      .gpc-wrap { border-top: 1px solid #e5e5e5; padding-top: 1.25rem; }
-      .gpc-title { font-size: 1.125rem; margin: 0 0 .75rem; }
-      .gpc-list { display: flex; flex-direction: column; gap: .75rem; margin-bottom: 1.25rem; }
-      .gpc-comment { padding: .65rem .8rem; border: 1px solid #eee; border-radius: 6px; background: #fafafa; }
-      .gpc-meta { display: flex; gap: .5rem; align-items: baseline; font-size: 12px; color: #666; margin-bottom: .25rem; }
-      .gpc-author { font-weight: 600; color: #111; }
-      .gpc-body p { margin: .25rem 0; }
-      .gpc-body pre, .gpc-body code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; background: #f0f0f0; padding: 0 .2em; border-radius: 3px; }
-      .gpc-body pre { padding: .5rem .6rem; overflow-x: auto; }
-      .gpc-form { display: flex; flex-direction: column; gap: .5rem; }
-      .gpc-label { display: flex; flex-direction: column; gap: .25rem; font-size: 12px; color: #555; }
-      .gpc-input, .gpc-textarea { padding: .45rem .55rem; border: 1px solid #ccc; border-radius: 4px; font: inherit; color: #111; background: #fff; }
-      .gpc-textarea { resize: vertical; min-height: 4.5em; }
-      .gpc-actions { display: flex; gap: .75rem; align-items: center; margin-top: .25rem; }
-      .gpc-button { padding: .45rem .9rem; border: 1px solid #222; background: #222; color: #fff; border-radius: 4px; cursor: pointer; font: inherit; }
-      .gpc-button:disabled { opacity: .5; cursor: progress; }
-      .gpc-flash { font-size: 12px; color: #2b7a2b; }
-      .gpc-flash-error { color: #b3261e; }
-      .gpc-muted { color: #777; }
-      .gpc-error { color: #b3261e; }
-    `;
-    document.head.appendChild(style);
+    const link = document.createElement("link");
+    link.id = "gpc-styles";
+    link.rel = "stylesheet";
+    link.href = `${ORIGIN}/api/comments/widget.css`;
+    document.head.appendChild(link);
   }
 })();

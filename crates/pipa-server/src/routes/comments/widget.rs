@@ -24,16 +24,29 @@ pub async fn widget_js(
     State(state): State<AppState>,
     headers: HeaderMap,
 ) -> Response {
-    let Some(asset) = WidgetAssets::get("comments.js") else {
-        return (StatusCode::NOT_FOUND, "widget not bundled").into_response();
+    serve_asset(&state, &headers, "comments.js", "application/javascript; charset=utf-8")
+}
+
+pub async fn widget_css(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Response {
+    serve_asset(&state, &headers, "comments.css", "text/css; charset=utf-8")
+}
+
+fn serve_asset(
+    state: &AppState,
+    headers: &HeaderMap,
+    name: &str,
+    content_type: &'static str,
+) -> Response {
+    let Some(asset) = WidgetAssets::get(name) else {
+        return (StatusCode::NOT_FOUND, "widget asset not bundled").into_response();
     };
 
     let mut resp = Response::builder()
         .status(StatusCode::OK)
-        .header(
-            header::CONTENT_TYPE,
-            "application/javascript; charset=utf-8",
-        )
+        .header(header::CONTENT_TYPE, content_type)
         .header(header::CACHE_CONTROL, "public, max-age=3600")
         .body(Body::from(asset.data.into_owned()))
         .expect("static widget response builds");
@@ -43,7 +56,7 @@ pub async fn widget_js(
         .and_then(|v| v.to_str().ok())
         .map(|s| s.trim().to_string());
 
-    if let Some(allowed) = resolve_cors(&state, origin.as_deref()) {
+    if let Some(allowed) = resolve_cors(state, origin.as_deref()) {
         if let Ok(val) = HeaderValue::from_str(&allowed) {
             resp.headers_mut()
                 .insert(header::ACCESS_CONTROL_ALLOW_ORIGIN, val);

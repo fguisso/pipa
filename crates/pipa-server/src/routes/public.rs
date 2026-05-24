@@ -9,6 +9,7 @@ use axum::http::{StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum_extra::extract::cookie::{Cookie, CookieJar, SameSite};
+use bytes::Bytes;
 use pipa_adapters::verify_password;
 use pipa_core::{Csp, Mode, NewHit, Page, Visibility};
 use hmac::{Hmac, Mac};
@@ -221,10 +222,20 @@ async fn serve_file(
         status,
     );
 
+    // When comments are enabled, inject the widget <script> tag at request
+    // time. The bundle on disk is never modified — toggling comments_enabled
+    // off makes the very next request serve the original bytes verbatim.
+    // We only touch HTML responses; binary assets pass through unchanged.
+    let body_bytes = if page.comments_enabled && is_html_mime(&mime) {
+        inject_comments_widget(&bytes, &page.uuid)
+    } else {
+        bytes
+    };
+
     let mut resp = Response::builder()
         .status(StatusCode::OK)
         .header(header::CONTENT_TYPE, mime)
-        .body(Body::from(bytes))
+        .body(Body::from(body_bytes))
         .map_err(|e| ServerError::Internal(anyhow::anyhow!("build response: {e}")))?;
     // CSP is set per-response, gated by the page's `csp` knob: `Strict` (the
     // default) emits the locked-down policy; `Off` lets the owner declare
@@ -437,4 +448,33 @@ fn unix_now() -> i64 {
 
 fn not_found_response() -> Response {
     (StatusCode::NOT_FOUND, "not found").into_response()
+}
+
+fn is_html_mime(mime: &str) -> bool {
+    // mime_guess returns variants like "text/html" and "text/html; charset=…"
+    let head = mime.split(';').next().unwrap_or(mime).trim();
+    head.eq_ignore_ascii_case("text/html") || head.eq_ignore_ascii_case("application/xhtml+xml")
+}
+
+/// Splice the comments widget script tag into an HTML body just before
+/// `</body>` (case-insensitive search). If no closing body tag exists we
+/// append at the end of the document — small SPA shells without a literal
+/// `</body>` still get the widget. Idempotent for the per-request case: we
+/// generate the bundle on each response, the stored file is untouched.
+fn inject_comments_widget(html: &Bytes, page_uuid: &str) -> Bytes {
+    let snippet = format!(
+        "<script src=\"/api/comments/widget.js\" data-page=\"{page_uuid}\" async></script>"
+    );
+    let Ok(text) = std::str::from_utf8(html) else {
+        // Non-UTF8 HTML is exotic enough that we serve it untouched rather
+        // than risk corrupting bytes.
+        return html.clone();
+    };
+    let lower = text.to_ascii_lowercase();
+    let insert_at = lower.rfind("</body>").unwrap_or(text.len());
+    let mut out = String::with_capacity(text.len() + snippet.len());
+    out.push_str(&text[..insert_at]);
+    out.push_str(&snippet);
+    out.push_str(&text[insert_at..]);
+    Bytes::from(out)
 }

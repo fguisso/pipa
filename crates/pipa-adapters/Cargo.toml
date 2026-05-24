@@ -11,12 +11,19 @@ description = "Storage, repository and auth adapters for pipa"
 [dependencies]
 pipa-core = { path = "../pipa-core" }
 anyhow.workspace = true
+argon2.workspace = true
 async-trait.workspace = true
 bytes.workspace = true
+chacha20poly1305.workspace = true
+hex.workspace = true
+rand.workspace = true
 serde.workspace = true
+sha2.workspace = true
 sqlx.workspace = true
 thiserror.workspace = true
 time.workspace = true
 tokio.workspace = true
+toml.workspace = true
 tracing.workspace = true
 ulid.workspace = true
+walkdir.workspace = true

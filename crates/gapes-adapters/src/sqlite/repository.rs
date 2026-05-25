@@ -284,14 +284,14 @@ impl Repository for SqliteRepository {
         sqlx::query(
             r#"
             INSERT INTO comments (
-                id, page_uuid, parent_id, author, body_md, body_html,
-                contact, ts, ip_hash, status, user_agent
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                id, page_uuid, author, body_md, body_html,
+                contact, ts, ip_hash, status, user_agent,
+                anchor_selector, anchor_text, anchor_offset
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             "#,
         )
         .bind(&c.id)
         .bind(&c.page_uuid)
-        .bind(&c.parent_id)
         .bind(&c.author)
         .bind(&c.body_md)
         .bind(&c.body_html)
@@ -300,6 +300,9 @@ impl Repository for SqliteRepository {
         .bind(&c.ip_hash)
         .bind(c.status.as_str())
         .bind(&c.user_agent)
+        .bind(&c.anchor_selector)
+        .bind(&c.anchor_text)
+        .bind(c.anchor_offset)
         .execute(&self.pool)
         .await
         .map_err(db)?;

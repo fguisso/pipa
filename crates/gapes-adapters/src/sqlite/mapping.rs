@@ -46,7 +46,6 @@ pub fn comment_from_row(row: &SqliteRow) -> Result<Comment> {
     Ok(Comment {
         id: get(row, "id")?,
         page_uuid: get(row, "page_uuid")?,
-        parent_id: opt(row, "parent_id")?,
         author: get(row, "author")?,
         body_md: get(row, "body_md")?,
         body_html: get(row, "body_html")?,
@@ -55,6 +54,9 @@ pub fn comment_from_row(row: &SqliteRow) -> Result<Comment> {
         ip_hash: get(row, "ip_hash")?,
         status: CommentStatus::from_str(&status_s)?,
         user_agent: opt(row, "user_agent")?,
+        anchor_selector: get(row, "anchor_selector")?,
+        anchor_text: get(row, "anchor_text")?,
+        anchor_offset: get_i64(row, "anchor_offset")?,
     })
 }
 

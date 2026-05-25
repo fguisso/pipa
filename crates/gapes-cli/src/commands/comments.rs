@@ -21,6 +21,8 @@ struct Row {
     author: String,
     #[tabled(rename = "TS")]
     ts: String,
+    #[tabled(rename = "ANCHOR")]
+    anchor: String,
     #[tabled(rename = "PREVIEW")]
     preview: String,
 }
@@ -79,6 +81,7 @@ pub async fn run(args: CommentsArgs) -> Result<()> {
                     status: c.status.clone(),
                     author: c.author.clone(),
                     ts: fmt_ts(c.ts),
+                    anchor: preview(&c.anchor_text, 20),
                     preview: preview(&c.body_md, 40),
                 })
                 .collect();

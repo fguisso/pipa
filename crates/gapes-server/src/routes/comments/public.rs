@@ -22,15 +22,23 @@ use crate::state::AppState;
 
 use super::sanitize::markdown_to_safe_html;
 
-/// Stripped-down public view: no `contact`, `ip_hash`, `user_agent`, `body_md`,
-/// `parent_id`. We hand-build this rather than serializing `Comment` so a
-/// future field on the core type cannot accidentally leak.
+/// Stripped-down public view: no `contact`, `ip_hash`, `user_agent`, `body_md`.
+/// We hand-build this rather than serializing `Comment` so a future field on
+/// the core type cannot accidentally leak.
 #[derive(Debug, Serialize)]
 pub struct PublicCommentView {
     pub id: String,
     pub author: String,
     pub html: String,
     pub ts: i64,
+    pub anchor: PublicAnchorView,
+}
+
+#[derive(Debug, Serialize)]
+pub struct PublicAnchorView {
+    pub selector: String,
+    pub text: String,
+    pub offset: i64,
 }
 
 impl From<&Comment> for PublicCommentView {
@@ -40,6 +48,11 @@ impl From<&Comment> for PublicCommentView {
             author: c.author.clone(),
             html: c.body_html.clone(),
             ts: c.ts,
+            anchor: PublicAnchorView {
+                selector: c.anchor_selector.clone(),
+                text: c.anchor_text.clone(),
+                offset: c.anchor_offset,
+            },
         }
     }
 }
@@ -55,6 +68,14 @@ pub struct CommentRequest {
     pub body: String,
     #[serde(default)]
     pub contact: Option<String>,
+    pub anchor: AnchorRequest,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct AnchorRequest {
+    pub selector: String,
+    pub text: String,
+    pub offset: i64,
 }
 
 #[derive(Debug, Serialize)]
@@ -63,6 +84,7 @@ pub struct CommentResponse {
     pub status: &'static str,
     pub html: String,
     pub ts: i64,
+    pub anchor: PublicAnchorView,
 }
 
 pub async fn list_comments(
@@ -122,6 +144,16 @@ pub async fn post_comment(
         }
     }
 
+    let anchor_selector = trim_and_cap(&req.anchor.selector, 512);
+    let anchor_text = trim_and_cap(&req.anchor.text, 500);
+    if anchor_selector.is_empty() || anchor_text.is_empty() {
+        return Err(ApiError::bad_request(
+            "invalid_anchor",
+            "anchor selector and text must be non-empty",
+        )
+        .into());
+    }
+
     let body_html = markdown_to_safe_html(&body_md);
     let status = if page.comments_require_approval {
         CommentStatus::Pending
@@ -138,7 +170,6 @@ pub async fn post_comment(
     let new_comment = NewComment {
         id: id.clone(),
         page_uuid: uuid.clone(),
-        parent_id: None,
         author: author.clone(),
         body_md: body_md.clone(),
         body_html: body_html.clone(),
@@ -147,6 +178,9 @@ pub async fn post_comment(
         ip_hash: ip_hash.clone(),
         status,
         user_agent,
+        anchor_selector: anchor_selector.clone(),
+        anchor_text: anchor_text.clone(),
+        anchor_offset: req.anchor.offset,
     };
 
     let saved = state.repo.create_comment(new_comment).await?;
@@ -170,6 +204,11 @@ pub async fn post_comment(
         status: saved.status.as_str(),
         html: public_html,
         ts: saved.ts,
+        anchor: PublicAnchorView {
+            selector: saved.anchor_selector.clone(),
+            text: saved.anchor_text.clone(),
+            offset: saved.anchor_offset,
+        },
     };
     Ok((StatusCode::OK, Json(resp)).into_response())
 }

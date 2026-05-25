@@ -66,7 +66,11 @@ async fn comments_disabled_returns_404() {
     // POST → 404 as well.
     let resp = client
         .post(format!("{base}/api/pages/{uuid}/comments"))
-        .json(&json!({ "author": "x", "body": "y" }))
+        .json(&json!({
+            "author": "x",
+            "body": "y",
+            "anchor": { "selector": "p", "text": "page", "offset": 0 }
+        }))
         .send()
         .await
         .expect("post");
@@ -100,6 +104,7 @@ async fn comments_sanitize_rate_limit_approval_and_moderation() {
         .json(&json!({
             "author": "alice",
             "body": "hello **world** <script>alert(1)</script>",
+            "anchor": { "selector": "h1", "text": "page", "offset": 0 }
         }))
         .send()
         .await
@@ -110,8 +115,10 @@ async fn comments_sanitize_rate_limit_approval_and_moderation() {
     assert!(!html.contains("<script"), "<script> must be stripped");
     assert!(html.contains("<strong>world</strong>"), "markdown rendered");
     assert_eq!(body["status"].as_str(), Some("visible"));
+    assert_eq!(body["anchor"]["selector"].as_str(), Some("h1"));
+    assert_eq!(body["anchor"]["text"].as_str(), Some("page"));
 
-    // Public GET must also be sanitized.
+    // Public GET must also be sanitized and include anchor.
     let resp = client
         .get(format!("{base}/api/pages/{uuid}/comments"))
         .send()
@@ -123,13 +130,20 @@ async fn comments_sanitize_rate_limit_approval_and_moderation() {
     let public_html = first["html"].as_str().expect("public html");
     assert!(!public_html.contains("<script"));
     assert!(public_html.contains("<strong>world</strong>"));
+    assert_eq!(first["anchor"]["selector"].as_str(), Some("h1"));
+    assert_eq!(first["anchor"]["text"].as_str(), Some("page"));
+    assert_eq!(first["anchor"]["offset"].as_i64(), Some(0));
 
     // ── Rate limit: 11th POST in <60s returns 429 ────────────────────────
     // We've already submitted 1; 9 more should succeed; the 11th must 429.
     for i in 0..9 {
         let resp = client
             .post(format!("{base}/api/pages/{uuid}/comments"))
-            .json(&json!({ "author": "alice", "body": format!("burst {i}") }))
+            .json(&json!({
+                "author": "alice",
+                "body": format!("burst {i}"),
+                "anchor": { "selector": "h1", "text": "page", "offset": 0 }
+            }))
             .send()
             .await
             .expect("burst post");
@@ -142,7 +156,11 @@ async fn comments_sanitize_rate_limit_approval_and_moderation() {
     }
     let resp = client
         .post(format!("{base}/api/pages/{uuid}/comments"))
-        .json(&json!({ "author": "alice", "body": "one too many" }))
+        .json(&json!({
+            "author": "alice",
+            "body": "one too many",
+            "anchor": { "selector": "h1", "text": "page", "offset": 0 }
+        }))
         .send()
         .await
         .expect("limit hit");
@@ -168,7 +186,11 @@ async fn comments_sanitize_rate_limit_approval_and_moderation() {
 
     let resp = client
         .post(format!("{base}/api/pages/{uuid2}/comments"))
-        .json(&json!({ "author": "bob", "body": "moderate me" }))
+        .json(&json!({
+            "author": "bob",
+            "body": "moderate me",
+            "anchor": { "selector": "h1", "text": "page", "offset": 0 }
+        }))
         .send()
         .await
         .expect("pending post");

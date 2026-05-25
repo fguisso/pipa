@@ -96,7 +96,6 @@ async fn page_crud_round_trip_and_cascade() {
     let new_comment = NewComment {
         id: "c1".into(),
         page_uuid: "page-1".into(),
-        parent_id: None,
         author: "alice".into(),
         body_md: "hi".into(),
         body_html: "<p>hi</p>".into(),
@@ -105,6 +104,9 @@ async fn page_crud_round_trip_and_cascade() {
         ip_hash: "iphash".into(),
         status: CommentStatus::Visible,
         user_agent: None,
+        anchor_selector: "p:nth-of-type(1)".into(),
+        anchor_text: "hello".into(),
+        anchor_offset: 0,
     };
     repo.create_comment(new_comment).await.expect("create_comment");
 
@@ -195,7 +197,6 @@ async fn comment_crud_and_status_transitions_and_rate_count() {
         repo.create_comment(NewComment {
             id: id.into(),
             page_uuid: "p".into(),
-            parent_id: None,
             author: "anon".into(),
             body_md: "hi".into(),
             body_html: "<p>hi</p>".into(),
@@ -204,6 +205,9 @@ async fn comment_crud_and_status_transitions_and_rate_count() {
             ip_hash: "iphash".into(),
             status,
             user_agent: None,
+            anchor_selector: "p".into(),
+            anchor_text: "hi".into(),
+            anchor_offset: 0,
         })
         .await
         .expect("create_comment");

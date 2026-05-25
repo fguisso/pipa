@@ -33,6 +33,9 @@ pub struct OwnerCommentView {
     pub ts: i64,
     pub status: &'static str,
     pub user_agent: Option<String>,
+    pub anchor_selector: String,
+    pub anchor_text: String,
+    pub anchor_offset: i64,
 }
 
 impl From<&Comment> for OwnerCommentView {
@@ -47,6 +50,9 @@ impl From<&Comment> for OwnerCommentView {
             ts: c.ts,
             status: c.status.as_str(),
             user_agent: c.user_agent.clone(),
+            anchor_selector: c.anchor_selector.clone(),
+            anchor_text: c.anchor_text.clone(),
+            anchor_offset: c.anchor_offset,
         }
     }
 }

@@ -40,7 +40,6 @@ impl FromStr for CommentStatus {
 pub struct Comment {
     pub id: String,
     pub page_uuid: String,
-    pub parent_id: Option<String>,
     pub author: String,
     pub body_md: String,
     pub body_html: String,
@@ -49,13 +48,15 @@ pub struct Comment {
     pub ip_hash: String,
     pub status: CommentStatus,
     pub user_agent: Option<String>,
+    pub anchor_selector: String,
+    pub anchor_text: String,
+    pub anchor_offset: i64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NewComment {
     pub id: String,
     pub page_uuid: String,
-    pub parent_id: Option<String>,
     pub author: String,
     pub body_md: String,
     pub body_html: String,
@@ -64,4 +65,7 @@ pub struct NewComment {
     pub ip_hash: String,
     pub status: CommentStatus,
     pub user_agent: Option<String>,
+    pub anchor_selector: String,
+    pub anchor_text: String,
+    pub anchor_offset: i64,
 }

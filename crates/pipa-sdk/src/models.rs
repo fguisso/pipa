@@ -134,8 +134,6 @@ pub struct ListDevicesResponse {
 pub struct Comment {
     pub id: String,
     pub page_uuid: String,
-    #[serde(default)]
-    pub parent_id: Option<String>,
     pub author: String,
     #[serde(default)]
     pub body_md: String,
@@ -148,6 +146,12 @@ pub struct Comment {
     pub status: String,
     #[serde(default)]
     pub user_agent: Option<String>,
+    #[serde(default)]
+    pub anchor_selector: String,
+    #[serde(default)]
+    pub anchor_text: String,
+    #[serde(default)]
+    pub anchor_offset: i64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]

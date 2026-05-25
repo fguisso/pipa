@@ -16,11 +16,19 @@ pub struct CommentsList {
 }
 
 #[derive(Debug, Clone, Serialize)]
+pub struct AnchorData<'a> {
+    pub selector: &'a str,
+    pub text: &'a str,
+    pub offset: i64,
+}
+
+#[derive(Debug, Clone, Serialize)]
 pub struct NewCommentRequest<'a> {
     pub author: &'a str,
     pub body: &'a str,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub contact: Option<&'a str>,
+    pub anchor: AnchorData<'a>,
 }
 
 impl Client {

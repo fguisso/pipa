@@ -1,25 +1,248 @@
-/* pipa comments widget styles.
-   Loaded as an external stylesheet so it works under the strict per-page
-   CSP (default-src 'self') — inline <style> blocks would be rejected. */
+/* pipa annotation widget styles.
+   Loaded as an external stylesheet — CSP-safe (default-src 'self'). */
 
-#pipa-comments { max-width: 720px; margin: 2rem auto; font: 14px/1.5 system-ui, sans-serif; color: #222; }
-.gpc-wrap { border-top: 1px solid #e5e5e5; padding-top: 1.25rem; }
-.gpc-title { font-size: 1.125rem; margin: 0 0 .75rem; }
-.gpc-list { display: flex; flex-direction: column; gap: .75rem; margin-bottom: 1.25rem; }
-.gpc-comment { padding: .65rem .8rem; border: 1px solid #eee; border-radius: 6px; background: #fafafa; }
-.gpc-meta { display: flex; gap: .5rem; align-items: baseline; font-size: 12px; color: #666; margin-bottom: .25rem; }
-.gpc-author { font-weight: 600; color: #111; }
-.gpc-body p { margin: .25rem 0; }
-.gpc-body pre, .gpc-body code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; background: #f0f0f0; padding: 0 .2em; border-radius: 3px; }
-.gpc-body pre { padding: .5rem .6rem; overflow-x: auto; }
-.gpc-form { display: flex; flex-direction: column; gap: .5rem; }
-.gpc-label { display: flex; flex-direction: column; gap: .25rem; font-size: 12px; color: #555; }
-.gpc-input, .gpc-textarea { padding: .45rem .55rem; border: 1px solid #ccc; border-radius: 4px; font: inherit; color: #111; background: #fff; }
-.gpc-textarea { resize: vertical; min-height: 4.5em; }
-.gpc-actions { display: flex; gap: .75rem; align-items: center; margin-top: .25rem; }
-.gpc-button { padding: .45rem .9rem; border: 1px solid #222; background: #222; color: #fff; border-radius: 4px; cursor: pointer; font: inherit; }
-.gpc-button:disabled { opacity: .5; cursor: progress; }
-.gpc-flash { font-size: 12px; color: #2b7a2b; }
-.gpc-flash-error { color: #b3261e; }
-.gpc-muted { color: #777; }
-.gpc-error { color: #b3261e; }
+/* ── FAB ─────────────────────────────────────────────────────────── */
+.gpc-fab {
+  position: fixed; bottom: 24px; right: 24px; z-index: 99990;
+  width: 48px; height: 48px; border-radius: 50%;
+  background: #222; color: #fff; border: none; cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0,0,0,.25);
+  display: flex; align-items: center; justify-content: center;
+  transition: transform .15s ease, box-shadow .15s ease;
+  padding: 0;
+}
+.gpc-fab:hover { transform: scale(1.08); box-shadow: 0 4px 14px rgba(0,0,0,.3); }
+.gpc-fab svg { width: 22px; height: 22px; fill: #fff; }
+.gpc-fab-badge {
+  position: absolute; top: -4px; right: -4px;
+  background: #e53935; color: #fff; font-size: 11px; font-weight: 600;
+  min-width: 18px; height: 18px; border-radius: 9px;
+  display: flex; align-items: center; justify-content: center;
+  padding: 0 4px; line-height: 1;
+}
+
+/* ── Sidebar ─────────────────────────────────────────────────────── */
+.gpc-sidebar {
+  position: fixed; top: 0; right: 0; width: 360px; height: 100%;
+  z-index: 99999; background: #fff;
+  box-shadow: -2px 0 12px rgba(0,0,0,.12);
+  transform: translateX(100%);
+  transition: transform .25s ease;
+  display: flex; flex-direction: column;
+  font: 14px/1.5 system-ui, -apple-system, sans-serif; color: #222;
+}
+.gpc-sidebar--open { transform: translateX(0); }
+.gpc-sidebar-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 18px; border-bottom: 1px solid #eee;
+}
+.gpc-sidebar-title { font-size: 16px; font-weight: 600; margin: 0; }
+.gpc-sidebar-close {
+  background: none; border: none; font-size: 22px; cursor: pointer;
+  color: #666; padding: 0 4px; line-height: 1;
+}
+.gpc-sidebar-close:hover { color: #222; }
+.gpc-sidebar-list {
+  flex: 1; overflow-y: auto; padding: 12px 18px;
+  display: flex; flex-direction: column; gap: 12px;
+}
+.gpc-sidebar-empty { color: #999; font-size: 13px; text-align: center; padding: 24px 0; }
+
+/* ── Sidebar anchor group ────────────────────────────────────────── */
+.gpc-group {
+  border: 1px solid #eee; border-radius: 8px;
+  background: #fafafa; overflow: hidden;
+}
+.gpc-group-quote-row {
+  padding: 8px 12px; cursor: pointer;
+  border-bottom: 1px solid #f0f0f0;
+  transition: background .12s;
+}
+.gpc-group-quote-row:hover { background: #f5f5f5; }
+.gpc-card-quote {
+  border-left: 3px solid #ffd54f; padding-left: 8px;
+  font-size: 12px; color: #666; margin: 0;
+  font-style: italic; line-height: 1.4;
+  overflow: hidden; text-overflow: ellipsis;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+}
+
+/* ── Individual comment inside a group ───────────────────────────── */
+.gpc-comment {
+  padding: 8px 12px;
+  border-bottom: 1px solid #f0f0f0;
+  position: relative;
+}
+.gpc-comment:last-of-type { border-bottom: none; }
+.gpc-card-meta {
+  display: flex; gap: 6px; align-items: baseline;
+  font-size: 12px; color: #888; margin-bottom: 2px;
+}
+.gpc-card-author { font-weight: 600; color: #333; }
+.gpc-card-body { font-size: 13px; }
+.gpc-card-body p { margin: 2px 0; }
+.gpc-card-delete {
+  position: absolute; top: 6px; right: 6px;
+  background: none; border: 1px solid transparent; border-radius: 4px;
+  cursor: pointer; padding: 2px 4px; color: #ccc;
+  display: flex; align-items: center;
+  transition: color .15s ease, border-color .15s ease;
+  opacity: 0; transition: opacity .12s ease, color .15s ease;
+}
+.gpc-comment:hover .gpc-card-delete { opacity: 1; }
+.gpc-card-delete:hover { color: #b3261e; border-color: #b3261e; }
+.gpc-card-delete svg { width: 14px; height: 14px; }
+
+/* ── Reply input at bottom of group ──────────────────────────────── */
+.gpc-reply-row {
+  padding: 6px 10px 8px;
+  border-top: 1px solid #f0f0f0;
+  display: flex; flex-direction: column; gap: 4px;
+}
+.gpc-reply-name {
+  padding: 4px 8px; border: 1px solid #ddd; border-radius: 4px;
+  font: 12px system-ui, sans-serif; color: #111; background: #fff;
+  width: 100%; box-sizing: border-box;
+}
+.gpc-reply-wrap {
+  display: flex; gap: 4px;
+}
+.gpc-reply-input {
+  flex: 1; padding: 5px 8px; border: 1px solid #ddd; border-radius: 4px;
+  font: 13px system-ui, sans-serif; color: #111; background: #fff;
+  min-width: 0;
+}
+.gpc-reply-input:focus { outline: none; border-color: #aaa; }
+.gpc-reply-send {
+  padding: 4px 10px; border: none; background: #222; color: #fff;
+  border-radius: 4px; cursor: pointer; font-size: 14px; line-height: 1;
+  flex-shrink: 0;
+}
+.gpc-reply-send:hover { background: #444; }
+.gpc-reply-send:disabled { opacity: .5; cursor: progress; }
+.gpc-reply-flash { font-size: 11px; color: #2b7a2b; min-height: 14px; }
+.gpc-reply-flash-error { color: #b3261e; }
+
+/* ── Tooltip (near text selection) ───────────────────────────────── */
+.gpc-tooltip {
+  position: absolute; z-index: 99991;
+  background: #222; color: #fff; border-radius: 6px;
+  padding: 4px 12px; font: 13px/1 system-ui, sans-serif;
+  cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,.25);
+  white-space: nowrap; user-select: none;
+}
+.gpc-tooltip::after {
+  content: ""; position: absolute; bottom: -5px; left: 50%;
+  transform: translateX(-50%);
+  border: 5px solid transparent; border-top-color: #222;
+  border-bottom: 0;
+}
+.gpc-tooltip:hover { background: #444; }
+
+/* ── Inline form (first comment on new selection) ────────────────── */
+.gpc-inline-form {
+  position: absolute; z-index: 99992;
+  background: #fff; border: 1px solid #ddd; border-radius: 8px;
+  padding: 14px; width: 300px;
+  box-shadow: 0 4px 16px rgba(0,0,0,.14);
+  font: 14px/1.5 system-ui, sans-serif; color: #222;
+}
+.gpc-inline-form-quote {
+  font-size: 12px; color: #666; font-style: italic;
+  border-left: 3px solid #ffd54f; padding-left: 8px;
+  margin-bottom: 10px;
+  overflow: hidden; text-overflow: ellipsis;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+}
+.gpc-inline-label {
+  display: flex; flex-direction: column; gap: 3px;
+  font-size: 12px; color: #555; margin-bottom: 8px;
+}
+.gpc-inline-input, .gpc-inline-textarea {
+  padding: 6px 8px; border: 1px solid #ccc; border-radius: 4px;
+  font: inherit; color: #111; background: #fff; width: 100%;
+  box-sizing: border-box;
+}
+.gpc-inline-textarea { resize: vertical; min-height: 60px; }
+.gpc-inline-actions { display: flex; gap: 8px; align-items: center; margin-top: 4px; }
+.gpc-inline-submit {
+  padding: 6px 14px; border: none; background: #222; color: #fff;
+  border-radius: 4px; cursor: pointer; font: inherit; font-size: 13px;
+}
+.gpc-inline-submit:disabled { opacity: .5; cursor: progress; }
+.gpc-inline-cancel {
+  padding: 6px 10px; border: 1px solid #ccc; background: #fff; color: #555;
+  border-radius: 4px; cursor: pointer; font: inherit; font-size: 13px;
+}
+.gpc-inline-flash { font-size: 12px; color: #2b7a2b; }
+.gpc-inline-flash-error { color: #b3261e; }
+
+/* ── Highlights on the page ──────────────────────────────────────── */
+.gpc-highlight {
+  background: rgba(255, 213, 79, .3);
+  border-radius: 2px; cursor: pointer;
+  transition: background .15s ease;
+}
+.gpc-highlight:hover { background: rgba(255, 213, 79, .55); }
+.gpc-highlight--pulse {
+  animation: gpc-pulse .8s ease-in-out 2;
+}
+@keyframes gpc-pulse {
+  0%, 100% { background: rgba(255, 213, 79, .3); }
+  50% { background: rgba(255, 213, 79, .7); }
+}
+
+/* ── Highlight hover badge ───────────────────────────────────────── */
+.gpc-hover-badge {
+  position: absolute; z-index: 99989;
+  display: flex; align-items: center; gap: 4px;
+  background: #222; color: #fff; border-radius: 12px;
+  padding: 3px 8px 3px 6px;
+  font: 12px/1 system-ui, sans-serif; font-weight: 600;
+  box-shadow: 0 2px 6px rgba(0,0,0,.2);
+  pointer-events: none;
+  white-space: nowrap;
+  opacity: 0; transition: opacity .12s ease;
+}
+.gpc-hover-badge--visible { opacity: 1; }
+.gpc-hover-badge svg { width: 14px; height: 14px; fill: #fff; flex-shrink: 0; }
+
+/* ── Overlay ─────────────────────────────────────────────────────── */
+.gpc-overlay {
+  position: fixed; inset: 0; z-index: 99998;
+  background: rgba(0,0,0,.08);
+}
+
+/* ── Delete confirmation modal ───────────────────────────────────── */
+.gpc-modal {
+  position: fixed; inset: 0; z-index: 100000;
+  display: none; align-items: center; justify-content: center;
+  font: 14px/1.5 system-ui, -apple-system, sans-serif;
+}
+.gpc-modal--open { display: flex; }
+.gpc-modal-backdrop {
+  position: absolute; inset: 0; background: rgba(0,0,0,.35);
+}
+.gpc-modal-box {
+  position: relative; background: #fff; border-radius: 10px;
+  padding: 24px 28px; min-width: 280px; max-width: 340px;
+  box-shadow: 0 8px 30px rgba(0,0,0,.18);
+  text-align: center;
+}
+.gpc-modal-text {
+  margin: 0 0 18px; font-size: 15px; color: #222;
+}
+.gpc-modal-actions {
+  display: flex; gap: 10px; justify-content: center;
+}
+.gpc-modal-cancel {
+  padding: 7px 18px; border: 1px solid #ccc; background: #fff;
+  color: #555; border-radius: 6px; cursor: pointer; font: inherit;
+}
+.gpc-modal-cancel:hover { background: #f5f5f5; }
+.gpc-modal-confirm {
+  padding: 7px 18px; border: none; background: #b3261e;
+  color: #fff; border-radius: 6px; cursor: pointer; font: inherit; font-weight: 600;
+}
+.gpc-modal-confirm:hover { background: #932019; }
+.gpc-modal-confirm:disabled { opacity: .6; cursor: progress; }

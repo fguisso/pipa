@@ -16,6 +16,8 @@ use hmac::{Hmac, Mac};
 use serde::Deserialize;
 use sha2::Sha256;
 
+use crate::auth::OwnerCookieOpt;
+use crate::auth::tokens::mint_access_token;
 use crate::error::ServerError;
 use crate::ip_hash::{hmac_ip, hmac_value};
 use crate::middleware::forwarded::RealIp;
@@ -97,8 +99,9 @@ async fn serve_root(
     real_ip: RealIp,
     headers: HeaderMap,
     jar: CookieJar,
+    owner: OwnerCookieOpt,
 ) -> Response {
-    serve(state, uuid, String::new(), real_ip, headers, jar).await
+    serve(state, uuid, String::new(), real_ip, headers, jar, owner).await
 }
 
 async fn serve_path(
@@ -107,8 +110,9 @@ async fn serve_path(
     real_ip: RealIp,
     headers: HeaderMap,
     jar: CookieJar,
+    owner: OwnerCookieOpt,
 ) -> Response {
-    serve(state, uuid, path, real_ip, headers, jar).await
+    serve(state, uuid, path, real_ip, headers, jar, owner).await
 }
 
 async fn serve(
@@ -118,8 +122,9 @@ async fn serve(
     real_ip: RealIp,
     headers: HeaderMap,
     jar: CookieJar,
+    owner: OwnerCookieOpt,
 ) -> Response {
-    match serve_inner(state, uuid, rel_path, real_ip, headers, jar).await {
+    match serve_inner(state, uuid, rel_path, real_ip, headers, jar, owner).await {
         Ok(resp) => resp,
         Err(e) => e.into_response(),
     }
@@ -132,6 +137,7 @@ async fn serve_inner(
     real_ip: RealIp,
     headers: HeaderMap,
     jar: CookieJar,
+    owner: OwnerCookieOpt,
 ) -> Result<Response, ServerError> {
     let page = match state.repo.find_page(&uuid).await? {
         Some(p) => p,
@@ -157,7 +163,7 @@ async fn serve_inner(
         }
     }
 
-    serve_file(&state, &page, &rel_path, &real_ip, &headers).await
+    serve_file(&state, &page, &rel_path, &real_ip, &headers, owner.0.is_some()).await
 }
 
 async fn serve_file(
@@ -166,6 +172,7 @@ async fn serve_file(
     raw_path: &str,
     real_ip: &RealIp,
     headers: &HeaderMap,
+    is_admin: bool,
 ) -> Result<Response, ServerError> {
     let mut rel = raw_path.trim_start_matches('/').to_string();
     if rel.is_empty() {
@@ -227,7 +234,14 @@ async fn serve_file(
     // off makes the very next request serve the original bytes verbatim.
     // We only touch HTML responses; binary assets pass through unchanged.
     let body_bytes = if page.comments_enabled && is_html_mime(&mime) {
-        inject_comments_widget(&bytes, &page.uuid)
+        let admin_token = if is_admin {
+            mint_access_token(&state.hmac_key, "owner", &format!("admin:{}", page.uuid), 300)
+                .ok()
+                .map(|(tok, _)| tok)
+        } else {
+            None
+        };
+        inject_comments_widget(&bytes, &page.uuid, admin_token.as_deref())
     } else {
         bytes
     };
@@ -461,9 +475,13 @@ fn is_html_mime(mime: &str) -> bool {
 /// append at the end of the document — small SPA shells without a literal
 /// `</body>` still get the widget. Idempotent for the per-request case: we
 /// generate the bundle on each response, the stored file is untouched.
-fn inject_comments_widget(html: &Bytes, page_uuid: &str) -> Bytes {
+fn inject_comments_widget(html: &Bytes, page_uuid: &str, admin_token: Option<&str>) -> Bytes {
+    let token_attr = match admin_token {
+        Some(tok) => format!(" data-token=\"{tok}\""),
+        None => String::new(),
+    };
     let snippet = format!(
-        "<script src=\"/api/comments/widget.js\" data-page=\"{page_uuid}\" async></script>"
+        "<script src=\"/api/comments/widget.js\" data-page=\"{page_uuid}\"{token_attr} async></script>"
     );
     let Ok(text) = std::str::from_utf8(html) else {
         // Non-UTF8 HTML is exotic enough that we serve it untouched rather

@@ -273,6 +273,8 @@ Read [`SECURITY.md`](.claude/project-docs/SECURITY.md) for the always-on default
 
 ## License
 
+Copyright (C) 2026 Fernando Guisso.
+
 - Server, core, adapters, and CLI: **AGPL-3.0-or-later** ([`LICENSE`](LICENSE))
 - SDK: **Apache-2.0** ([`crates/pipa-sdk/LICENSE`](crates/pipa-sdk/LICENSE)) — kept permissive so third-party tools and AI agents can embed the API client without copyleft obligations.
 

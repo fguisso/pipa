@@ -170,3 +170,11 @@ pub struct CommentsConfig {
     pub enabled: bool,
     pub require_approval: bool,
 }
+
+/// Response of `GET /api/meta` — optional features this server enforces.
+/// Absent features mean the matching flags are accepted but not enforced.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MetaResponse {
+    #[serde(default)]
+    pub features: Vec<String>,
+}

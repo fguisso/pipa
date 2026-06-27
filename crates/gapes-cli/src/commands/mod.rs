@@ -2,6 +2,7 @@
 
 pub mod activity;
 pub mod comments;
+pub mod concepts;
 pub mod deploy;
 pub mod devices;
 pub mod get;
@@ -9,6 +10,7 @@ pub mod ls;
 pub mod login;
 pub mod logout;
 pub mod rm;
+pub mod server;
 pub mod share;
 pub mod stats;
 pub mod whoami;
@@ -60,4 +62,33 @@ pub async fn client_with_access(scope: &str) -> Result<(Client, String, String)>
         );
     }
     Ok((client, server, mint.access))
+}
+
+/// Guard a feature-dependent flag (e.g. `--zone`) against the target server's
+/// advertised capabilities (`GET /api/meta`). When the server doesn't enforce
+/// `feature`, refuse unless `force` is set — so a value the server would
+/// silently ignore can't give a false sense of security. `force` skips the
+/// check entirely (no network call).
+pub async fn ensure_feature(
+    client: &Client,
+    access: &str,
+    feature: &str,
+    flag: &str,
+    force: bool,
+) -> Result<()> {
+    if force {
+        return Ok(());
+    }
+    let features = client
+        .meta(access)
+        .await
+        .map(|m| m.features)
+        .context("querying server capabilities (/api/meta)")?;
+    if !features.iter().any(|f| f == feature) {
+        anyhow::bail!(
+            "this server does not enforce `{feature}` — `{flag}` would be stored but ignored. \
+             Re-run with --force to send it anyway, or check `gapes server`."
+        );
+    }
+    Ok(())
 }

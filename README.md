@@ -16,17 +16,20 @@ That's the whole product.
 ## What's in the box
 
 - **Static + SPA hosting** at `/p/<uuid>/*` with client-side routing fallback.
-- **Private by default.** Flip per page to `public`, `password`, or back.
+- **Secure by default.** New pages are password-gated. Per page you set *who* can open it (`access`: `password` / `noauth`) and *where* it's reachable (`zone`: `private` = LAN only / `public` = internet only).
 - **Built-in analytics:** views, uniques, top paths, top referrers. No IPs stored.
 - **Built-in comments:** anonymous, markdown-sanitized, owner-moderated, embeddable widget.
 - **Secure CLI:** device-flow login (QR in terminal), OS-keychain credentials, scoped tokens, browser step-up for destructive ops.
+- **Agent-ready.** `--json` output everywhere, capability discovery (`gapes server`), and an installable [agent skill](skills/gapes/SKILL.md) so an AI agent can install and drive gapes.
 - **Admin dashboard** at `/admin`: Alpine.js, no build step, no framework.
 - **One binary.** Rust + axum + SQLite + disk. ~25 MB, runs as non-root, no daemons.
 - **Caddy in front for TLS.** The server is HTTP-only by design.
 
 ## Quickstart (local, 60 seconds)
 
-You need [Rust 1.94+](https://www.rust-lang.org/tools/install) (or [`mise`](https://mise.jdx.dev/) to pin it for you).
+Install the CLI (users): `curl -fsSL https://guisso.dev/gapes/install.sh | sh`.
+
+To run the server locally from source you need [Rust 1.94+](https://www.rust-lang.org/tools/install) (or [`mise`](https://mise.jdx.dev/) to pin it for you).
 
 ```sh
 git clone https://github.com/fguisso/gapes.git && cd gapes
@@ -40,27 +43,28 @@ cp pages.example.toml pages.toml          # sane defaults; binds 127.0.0.1:8080
 ./target/release/gapes-server --dev
 ```
 
-On first boot it prints a setup code like `BRZQ-7K9P` (also written to `./data/.setup-code`). Copy it.
+On first boot, open `http://127.0.0.1:8080/setup` in a browser and create your admin account.
 
 **Terminal 2, log in and deploy.**
 
 ```sh
-./target/release/gapes login --server http://127.0.0.1:8080
+gapes login --server http://127.0.0.1:8080
 #   ► visit http://127.0.0.1:8080/cli on any device
 #   ► or scan the QR
-#   ► paste the setup code (BRZQ-7K9P) and click approve
+#   ► open it, sign in as admin, and approve the device
 
 echo '<h1>hello from gapes</h1>' > /tmp/site/index.html
-./target/release/gapes deploy /tmp/site --visibility public
+gapes deploy /tmp/site          # secure by default: password-gated, server's default zone
 # ✓ deployed
 #   url: http://127.0.0.1:8080/p/01HXYZ...
 ```
 
-Open the URL. That's it.
+Open it to anyone (`gapes share <uuid> --access noauth`) or expose it to the internet (`gapes share <uuid> --zone public`); each loosens security, so each needs a browser step-up. Run `gapes concepts` for the full model.
 
 ## Documentation
 
-- [The CLI](docs/cli.md): every command, scopes, and where refresh tokens land.
+- [The CLI](docs/cli.md): every command, `--json`, scopes, and where refresh tokens land.
+- [Agent skill](skills/gapes/SKILL.md): install and drive gapes from any AI agent (Codex / Claude Code / Hermes).
 - [Comments on a page](docs/comments.md): enable, embed the widget, moderate.
 - [Admin dashboard](docs/admin.md): the `/admin` UI and what it can and can't do.
 - [Production deploy](docs/deploy.md): Docker compose, install script, or from source.

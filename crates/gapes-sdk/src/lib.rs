@@ -16,6 +16,7 @@ pub mod comments;
 pub mod devices;
 pub mod error;
 pub mod models;
+pub mod meta;
 pub mod pages;
 
 pub use client::Client;

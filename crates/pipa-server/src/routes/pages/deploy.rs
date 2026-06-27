@@ -144,8 +144,11 @@ pub async fn deploy(
             .unwrap_or(Access::Password),
     };
 
-    // Zone defaults, on create, to the server operator's `[zone].default`
-    // (fallback `private` = secure). Bad config value also falls back to private.
+    // Zone is only honored when the `zone` feature is compiled in. A server
+    // without it ignores the param entirely (and never enforces zone), so it
+    // can't end up storing a misleading value; clients gate `--zone` via
+    // `/api/meta` + `--force`.
+    #[cfg(feature = "zone")]
     let zone: Zone = match form.zone.as_deref() {
         Some(s) => s.parse().map_err(|_| {
             ApiError::bad_request("invalid_zone", "zone must be public|private")
@@ -158,6 +161,11 @@ pub async fn deploy(
                 .parse()
                 .unwrap_or(Zone::Private)
         }),
+    };
+    #[cfg(not(feature = "zone"))]
+    let zone: Zone = {
+        let _ = &form.zone;
+        existing.as_ref().map(|p| p.zone).unwrap_or(Zone::Private)
     };
 
     // CSP knob: explicit form field wins; on update we preserve the existing

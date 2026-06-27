@@ -15,6 +15,7 @@ pub async fn run(args: RmArgs) -> Result<()> {
         &format!("DELETE page {}", args.uuid),
         "page.delete",
         Some(&args.uuid),
+        false,
     )
     .await?;
     client.delete_page(&access, &args.uuid, &outcome.code).await?;

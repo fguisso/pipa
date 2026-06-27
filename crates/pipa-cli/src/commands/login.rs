@@ -3,10 +3,10 @@
 //! Drives the device flow end-to-end:
 //!   1. Resolve server URL (flag → config → prompt).
 //!   2. POST `device-init` (anonymous — approval gating lives in the browser).
-//!   3. Auto-open `verify_url` in the user's browser; also print URL + QR.
+//!   3. Show `verify_url` (a human approves it in a browser; the CLI can't
+//!      self-approve). Auto-open + QR in human mode; a JSON line in --json mode.
 //!   4. Poll `device-poll` every 2s until Approved or expired (10 min).
 //!   5. Stash refresh in the highest-tier credstore available.
-//!   6. Pretty-print the storage tier so the user knows what protects it.
 
 use std::time::Duration;
 
@@ -25,7 +25,7 @@ use crate::qr;
 const POLL_INTERVAL_SECS: u64 = 2;
 const POLL_TIMEOUT_SECS: u64 = 600;
 
-pub async fn run(args: LoginArgs) -> Result<()> {
+pub async fn run(args: LoginArgs, json: bool) -> Result<()> {
     let theme = ColorfulTheme::default();
 
     let server = match args.server {
@@ -33,11 +33,19 @@ pub async fn run(args: LoginArgs) -> Result<()> {
         None => {
             let prev = config::load().server;
             let default = prev.unwrap_or_else(|| "http://127.0.0.1:8080".into());
-            let s: String = Input::with_theme(&theme)
-                .with_prompt("pipa server URL")
-                .default(default)
-                .interact_text()?;
-            s
+            if json {
+                // No interactive prompt in JSON mode — require an explicit server.
+                match config::load().server {
+                    Some(s) => s,
+                    None => bail!("--server <url> is required in --json mode"),
+                }
+            } else {
+                let s: String = Input::with_theme(&theme)
+                    .with_prompt("pipa server URL")
+                    .default(default)
+                    .interact_text()?;
+                s
+            }
         }
     };
     let server = server.trim_end_matches('/').to_string();
@@ -51,22 +59,31 @@ pub async fn run(args: LoginArgs) -> Result<()> {
         .await
         .context("failed to start device-flow with server")?;
 
-    let opened = browser::try_open(&init.verify_url);
-
-    println!();
-    if opened {
-        println!("► browser opened — approve on the page that just loaded.");
-        println!("  if nothing opened, visit:");
-        println!("    {}", cyan(&init.verify_url));
+    if json {
+        println!(
+            "{}",
+            serde_json::json!({
+                "verify_url": init.verify_url,
+                "expires_in": init.expires_in,
+            })
+        );
     } else {
-        println!("► visit on any device:");
-        println!("    {}", cyan(&init.verify_url));
+        let opened = browser::try_open(&init.verify_url);
+        println!();
+        if opened {
+            println!("► browser opened — approve on the page that just loaded.");
+            println!("  if nothing opened, visit:");
+            println!("    {}", cyan(&init.verify_url));
+        } else {
+            println!("► visit on any device:");
+            println!("    {}", cyan(&init.verify_url));
+        }
+        println!("► or scan:");
+        let qr_str = qr::render(&init.verify_url).unwrap_or_default();
+        println!("{qr_str}");
+        println!("► waiting for approval (polling every {POLL_INTERVAL_SECS}s, expires in 10:00)…");
+        println!();
     }
-    println!("► or scan:");
-    let qr_str = qr::render(&init.verify_url).unwrap_or_default();
-    println!("{qr_str}");
-    println!("► waiting for approval (polling every {POLL_INTERVAL_SECS}s, expires in 10:00)…");
-    println!();
 
     let started = std::time::Instant::now();
     let approved = loop {
@@ -108,16 +125,31 @@ pub async fn run(args: LoginArgs) -> Result<()> {
     };
     config::save(&cfg).context("writing config.toml")?;
 
+    if json {
+        println!(
+            "{}",
+            serde_json::json!({
+                "status": "approved",
+                "server": canonical_server,
+                "device": device_label,
+                "device_id": device_id,
+                "scope": scope_final,
+                "creds": store.display_name(),
+            })
+        );
+        return Ok(());
+    }
+
     println!("{} logged in ({} scope)", check(), scope_final);
     println!("{} device: {}", check(), device_label);
     let inner = vec![
         format!("stored in: {}", store.display_name()),
         format!("security:  {}", store.security_label()),
         String::new(),
-        format!("to revoke this device:"),
-        format!("  from another logged-in device:"),
+        "to revoke this device:".to_string(),
+        "  from another logged-in device:".to_string(),
         format!("    pipa devices revoke {}", device_id),
-        format!("  from the server console:"),
+        "  from the server console:".to_string(),
         format!("    pipa-server devices revoke {}", device_id),
     ];
     println!("{}", boxed("credential storage", &inner, 56));

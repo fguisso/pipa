@@ -1,7 +1,8 @@
 //! `pipa whoami` — answer "who am I, what's my scope, where is my token?".
 //! Mints a `manage:devices` access to enumerate devices, picks out the one
 //! whose id matches our locally-cached `device_id`, and prints the credstore
-//! tier that holds the refresh.
+//! tier that holds the refresh. With --json, emits a machine-readable status
+//! (including `logged_in`) so scripts/agents can branch on it.
 
 use anyhow::Result;
 
@@ -10,10 +11,14 @@ use crate::config;
 use crate::credstore;
 use crate::output::{check, dim, kv};
 
-pub async fn run() -> Result<()> {
+pub async fn run(json: bool) -> Result<()> {
     let cfg = config::load();
     let Some(server) = cfg.server.clone() else {
-        println!("{} not logged in", dim("·"));
+        if json {
+            println!("{}", serde_json::json!({ "logged_in": false }));
+        } else {
+            println!("{} not logged in", dim("·"));
+        }
         return Ok(());
     };
 
@@ -24,38 +29,42 @@ pub async fn run() -> Result<()> {
         .unwrap_or(("(none)", "—"));
 
     let result = client_with_access("manage:devices").await;
-    let (devices_summary, scope_line) = match result {
+    let (device, scope) = match result {
         Ok((client, _, access)) => match client.list_devices(&access).await {
             Ok(list) => {
                 let me = list
                     .devices
                     .iter()
-                    .find(|d| Some(&d.id) == cfg.device_id.as_ref());
+                    .find(|d| Some(&d.id) == cfg.device_id.as_ref())
+                    .or_else(|| list.devices.first());
                 if let Some(d) = me {
-                    (
-                        format!("{} ({})", d.label, d.id),
-                        format!("scope: {}", d.scope),
-                    )
-                } else if let Some(d) = list.devices.first() {
-                    (
-                        format!("{} ({})", d.label, d.id),
-                        format!("scope: {}", d.scope),
-                    )
+                    (format!("{} ({})", d.label, d.id), d.scope.to_string())
                 } else {
-                    ("(no devices?)".into(), "scope: (unknown)".into())
+                    ("(no devices?)".into(), "(unknown)".into())
                 }
             }
-            Err(e) => (format!("(server lookup failed: {e})"), "scope: ?".into()),
+            Err(e) => (format!("(server lookup failed: {e})"), "?".into()),
         },
-        Err(e) => (
-            "(could not mint access token)".into(),
-            format!("error: {e}"),
-        ),
+        Err(e) => ("(could not mint access token)".into(), format!("error: {e}")),
     };
 
-    println!("{} {}", check(), devices_summary);
+    if json {
+        println!(
+            "{}",
+            serde_json::json!({
+                "logged_in": true,
+                "server": server,
+                "device": device,
+                "scope": scope,
+                "creds": tier_name,
+            })
+        );
+        return Ok(());
+    }
+
+    println!("{} {}", check(), device);
     println!("{}", kv("server", &server));
-    println!("{}", kv(&scope_line.split(':').next().unwrap_or("scope"), scope_line.split_once(": ").map(|(_, v)| v).unwrap_or("?")));
+    println!("{}", kv("scope", &scope));
     println!("{}", kv("creds", &format!("{tier_name}  ({sec_label})")));
     Ok(())
 }

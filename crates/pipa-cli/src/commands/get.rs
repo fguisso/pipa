@@ -1,4 +1,4 @@
-//! `pipa get <uuid>` — pretty-print page metadata.
+//! `pipa get <uuid>` — pretty-print page metadata (or JSON with --json).
 
 use anyhow::Result;
 
@@ -6,10 +6,15 @@ use crate::cli::GetArgs;
 use crate::commands::client_with_access;
 use crate::output::{fmt_ts, human_bytes, kv};
 
-pub async fn run(args: GetArgs) -> Result<()> {
+pub async fn run(args: GetArgs, json: bool) -> Result<()> {
     let scope = format!("read:{}", args.uuid);
     let (client, _server, access) = client_with_access(&scope).await?;
     let page = client.get_page(&access, &args.uuid).await?;
+
+    if json {
+        println!("{}", serde_json::to_string_pretty(&page)?);
+        return Ok(());
+    }
 
     println!("{}", kv("uuid", &page.uuid));
     println!("{}", kv("name", page.name.as_deref().unwrap_or("—")));

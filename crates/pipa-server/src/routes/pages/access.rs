@@ -56,11 +56,20 @@ pub async fn change_access(
         })?),
         None => None,
     };
+    // `--zone` is only honored under the `zone` feature; otherwise the param is
+    // ignored so a non-enforcing server can't be tricked into a false sense of
+    // restriction. Clients gate this via `/api/meta` + `--force`.
+    #[cfg(feature = "zone")]
     let new_zone: Option<Zone> = match req.zone.as_deref() {
         Some(s) => Some(s.parse().map_err(|_| {
             ApiError::bad_request("invalid_zone", "zone must be public|private")
         })?),
         None => None,
+    };
+    #[cfg(not(feature = "zone"))]
+    let new_zone: Option<Zone> = {
+        let _ = &req.zone;
+        None
     };
     let new_csp: Option<Csp> = match req.csp.as_deref() {
         Some(s) => Some(s.parse().map_err(|_| {

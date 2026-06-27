@@ -1,8 +1,9 @@
 //! `pipa deploy <dir>` — zip the directory and POST it.
 //!
 //! Zipping happens in `spawn_blocking` so the runtime isn't starved by IO.
-//! A spinner indicates progress; for directories with many files we switch
-//! to a counted progress bar.
+//! A spinner indicates progress (drawn to stderr); for directories with many
+//! files we switch to a counted progress bar. With --json, only the final
+//! result object is written to stdout.
 
 use std::fs::File;
 use std::io::{Read, Write};
@@ -16,12 +17,12 @@ use walkdir::WalkDir;
 use zip::write::SimpleFileOptions;
 
 use crate::cli::DeployArgs;
-use crate::commands::client_with_access;
+use crate::commands::{client_with_access, ensure_feature};
 use crate::output::{check, human_bytes, kv};
 
 const PROGRESS_THRESHOLD_FILES: usize = 100;
 
-pub async fn run(args: DeployArgs) -> Result<()> {
+pub async fn run(args: DeployArgs, json: bool) -> Result<()> {
     let dir = args.dir.canonicalize().with_context(|| {
         format!("resolving deploy directory `{}`", args.dir.display())
     })?;
@@ -41,7 +42,16 @@ pub async fn run(args: DeployArgs) -> Result<()> {
     };
     let (client, _server, access) = client_with_access(&scope).await?;
 
-    let pb = if entries.len() >= PROGRESS_THRESHOLD_FILES {
+    // `--zone` only matters if the server enforces the `zone` feature; refuse
+    // up front otherwise (unless --force) so a value the server would ignore
+    // can't give a false sense of security.
+    if args.zone.is_some() {
+        ensure_feature(&client, &access, "zone", "--zone", args.force).await?;
+    }
+
+    let pb = if json {
+        None
+    } else if entries.len() >= PROGRESS_THRESHOLD_FILES {
         let pb = ProgressBar::new(entries.len() as u64);
         pb.set_style(
             ProgressStyle::with_template("  zipping {bar:32.cyan/blue} {pos}/{len} {wide_msg}")
@@ -73,7 +83,13 @@ pub async fn run(args: DeployArgs) -> Result<()> {
         pb.finish_and_clear();
     }
 
-    println!("  archive ready: {} ({} files)", human_bytes(archive.len() as u64), entries.len());
+    if !json {
+        println!(
+            "  archive ready: {} ({} files)",
+            human_bytes(archive.len() as u64),
+            entries.len()
+        );
+    }
 
     let params = DeployParams {
         uuid: args.uuid.clone(),
@@ -85,21 +101,33 @@ pub async fn run(args: DeployArgs) -> Result<()> {
         csp: args.csp.clone(),
     };
 
-    let upload_pb = ProgressBar::new_spinner();
-    upload_pb.set_style(
-        ProgressStyle::with_template("  {spinner} {wide_msg}")
-            .unwrap()
-            .tick_strings(&["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]),
-    );
-    upload_pb.enable_steady_tick(Duration::from_millis(80));
-    upload_pb.set_message("uploading…");
+    let upload_pb = if json {
+        None
+    } else {
+        let pb = ProgressBar::new_spinner();
+        pb.set_style(
+            ProgressStyle::with_template("  {spinner} {wide_msg}")
+                .unwrap()
+                .tick_strings(&["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]),
+        );
+        pb.enable_steady_tick(Duration::from_millis(80));
+        pb.set_message("uploading…");
+        Some(pb)
+    };
 
     let resp = client
         .deploy_archive(&access, archive, params)
         .await
         .context("deploy POST")?;
 
-    upload_pb.finish_and_clear();
+    if let Some(pb) = upload_pb {
+        pb.finish_and_clear();
+    }
+
+    if json {
+        println!("{}", serde_json::to_string_pretty(&resp)?);
+        return Ok(());
+    }
 
     println!("{} deployed", check());
     println!("{}", kv("uuid", &resp.uuid));

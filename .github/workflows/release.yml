@@ -1,0 +1,85 @@
+name: release
+
+# Build the `pipa` CLI and `pipa-server` for every supported target and
+# attach them to the GitHub Release for the pushed tag. The install script
+# (served at guisso.dev/pipa/install.sh) pulls these assets.
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: build ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            cross: false
+          - target: x86_64-unknown-linux-musl
+            os: ubuntu-latest
+            cross: true
+          - target: aarch64-unknown-linux-musl
+            os: ubuntu-latest
+            cross: true
+          - target: x86_64-apple-darwin
+            os: macos-13
+            cross: false
+          - target: aarch64-apple-darwin
+            os: macos-latest
+            cross: false
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+            cross: false
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+        with:
+          toolchain: stable
+          targets: ${{ matrix.target }}
+
+      - name: Install cross
+        if: matrix.cross
+        run: cargo install cross --locked
+
+      - name: Build
+        shell: bash
+        run: |
+          set -eu
+          # The `zone` feature ships in release binaries; tweak here if you want
+          # a minimal build per target.
+          FEATURES="--features pipa-server/zone"
+          if [ "${{ matrix.cross }}" = "true" ]; then
+            cross build --release --target ${{ matrix.target }} -p pipa-cli -p pipa-server $FEATURES
+          else
+            cargo build --release --target ${{ matrix.target }} -p pipa-cli -p pipa-server $FEATURES
+          fi
+
+      - name: Stage assets
+        shell: bash
+        run: |
+          set -eu
+          mkdir -p dist
+          ext=""
+          if [ "${{ matrix.target }}" = "x86_64-pc-windows-msvc" ]; then ext=".exe"; fi
+          for bin in pipa pipa-server; do
+            src="target/${{ matrix.target }}/release/${bin}${ext}"
+            dst="dist/${bin}-${{ matrix.target }}${ext}"
+            cp "$src" "$dst"
+          done
+          ls -la dist
+
+      - name: Upload to release
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
+        with:
+          files: dist/*
+          fail_on_unmatched_files: true

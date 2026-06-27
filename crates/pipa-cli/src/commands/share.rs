@@ -7,11 +7,11 @@
 use anyhow::{Result, bail};
 
 use crate::cli::ShareArgs;
-use crate::commands::client_with_access;
+use crate::commands::{client_with_access, ensure_feature};
 use crate::output::{check, kv};
 use crate::stepup;
 
-pub async fn run(args: ShareArgs) -> Result<()> {
+pub async fn run(args: ShareArgs, json: bool) -> Result<()> {
     // `--password` implies access=password (and rotates the secret).
     let access: Option<&str> = if args.password.is_some() {
         Some("password")
@@ -33,6 +33,12 @@ pub async fn run(args: ShareArgs) -> Result<()> {
     };
     let (client, _server, token) = client_with_access(&scope).await?;
 
+    // Refuse `--zone` against a server that doesn't enforce it (before any
+    // step-up handoff), unless --force.
+    if zone.is_some() {
+        ensure_feature(&client, &token, "zone", "--zone", args.force).await?;
+    }
+
     let stepup_code = if loosening {
         let outcome = stepup::drive(
             &client,
@@ -40,6 +46,7 @@ pub async fn run(args: ShareArgs) -> Result<()> {
             &format!("LOOSEN security on page {}", args.uuid),
             "page.weaken_security",
             Some(&args.uuid),
+            json,
         )
         .await?;
         Some(outcome.code)
@@ -58,6 +65,11 @@ pub async fn run(args: ShareArgs) -> Result<()> {
             stepup_code.as_deref(),
         )
         .await?;
+
+    if json {
+        println!("{}", serde_json::to_string_pretty(&view)?);
+        return Ok(());
+    }
 
     println!("{} updated", check());
     println!("{}", kv("uuid", &view.uuid));

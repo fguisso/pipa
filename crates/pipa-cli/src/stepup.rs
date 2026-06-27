@@ -1,7 +1,11 @@
 //! Shared step-up driver: post `stepup-init`, render the confirmation URL +
 //! QR, poll `stepup-status` every 1.5s until "confirmed" / "expired", return
 //! the code to the caller for the destructive call. Used by `rm`, `share
-//! --public`, `devices revoke <other>`.
+//! --public/--noauth`, `devices revoke <other>`.
+//!
+//! In `json` mode the box + QR are replaced by a single line
+//! `{"step_up":{"verify_url":...,"expires_in":...}}` on stdout, so an agent
+//! can grab the URL to hand to a human and the rest of stdout stays clean.
 
 use std::time::Duration;
 
@@ -28,25 +32,37 @@ pub async fn drive(
     intent: &str,
     operation: &str,
     target: Option<&str>,
+    json: bool,
 ) -> Result<StepUpOutcome> {
-    println!("{} destructive operation — requires confirmation", warn_mark());
-    println!();
-
     let init = client.stepup_init(access, operation, target).await?;
-    let qr_str = qr::render(&init.verify_url).unwrap_or_default();
 
-    let lines: Vec<String> = vec![
-        format!("open on any device:"),
-        format!("  {}", cyan(&init.verify_url)),
-        String::new(),
-        format!("operation: {intent}"),
-        format!("expires in: {}s", init.expires_in),
-    ];
-    println!("{}", boxed("step-up confirmation", &lines, 56));
-    println!();
-    println!("{}", qr_str);
-
-    println!("waiting…");
+    if json {
+        println!(
+            "{}",
+            serde_json::json!({
+                "step_up": {
+                    "verify_url": init.verify_url,
+                    "expires_in": init.expires_in,
+                    "intent": intent,
+                }
+            })
+        );
+    } else {
+        println!("{} destructive operation — requires confirmation", warn_mark());
+        println!();
+        let qr_str = qr::render(&init.verify_url).unwrap_or_default();
+        let lines: Vec<String> = vec![
+            "open on any device:".to_string(),
+            format!("  {}", cyan(&init.verify_url)),
+            String::new(),
+            format!("operation: {intent}"),
+            format!("expires in: {}s", init.expires_in),
+        ];
+        println!("{}", boxed("step-up confirmation", &lines, 56));
+        println!();
+        println!("{}", qr_str);
+        println!("waiting…");
+    }
 
     let deadline =
         std::time::Instant::now() + Duration::from_secs(init.expires_in.max(1) as u64 + 5);

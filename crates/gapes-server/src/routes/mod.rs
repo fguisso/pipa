@@ -8,6 +8,7 @@ pub mod auth;
 pub mod comments;
 pub mod devices;
 pub mod health;
+pub mod meta;
 pub mod pages;
 pub mod public;
 pub mod root;
@@ -28,6 +29,7 @@ pub fn router(state: AppState) -> Router {
         .merge(root::router())
         .merge(public::router(state.clone()))
         .merge(health::router())
+        .merge(meta::router())
         .merge(auth::router())
         .merge(devices::router())
         .merge(pages::router(&state))

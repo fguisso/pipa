@@ -5,6 +5,12 @@ use clap::{Args, Parser, Subcommand};
 #[derive(Debug, Parser)]
 #[command(name = "gapes", version, about = "gapes — deploy static sites you own", long_about = None)]
 pub struct Cli {
+    /// Emit machine-readable JSON to stdout instead of the human/TUI output
+    /// (also suppresses spinners, QR codes and colour). Handy for scripts and
+    /// AI agents driving the CLI.
+    #[arg(long, global = true)]
+    pub json: bool,
+
     #[command(subcommand)]
     pub command: Command,
 }
@@ -12,11 +18,19 @@ pub struct Cli {
 #[derive(Debug, Subcommand)]
 pub enum Command {
     /// Log in to a gapes server via device flow.
+    ///
+    /// Prints a one-time URL; a human must open it in a browser and approve
+    /// the device there (the CLI cannot self-approve). The CLI then polls
+    /// until approval and stores the refresh token locally.
     Login(LoginArgs),
     /// Revoke the current device and wipe the local credential.
     Logout,
-    /// Show the current device and credential storage tier.
+    /// Show the current device, scope and credential storage tier.
     Whoami,
+    /// Show the target server and the optional features it enforces.
+    Server,
+    /// Explain the access / zone / step-up model (no network call).
+    Concepts,
     /// Deploy a directory as a new or existing page.
     Deploy(DeployArgs),
     /// List your pages.
@@ -25,7 +39,7 @@ pub enum Command {
     Get(GetArgs),
     /// Show per-page analytics.
     Stats(StatsArgs),
-    /// Change a page's visibility / password.
+    /// Change a page's access method, zone and/or CSP.
     Share(ShareArgs),
     /// Delete a page (requires step-up confirmation).
     Rm(RmArgs),
@@ -69,7 +83,9 @@ pub struct DeployArgs {
     pub access: Option<String>,
     /// Network reach on create (the "where it's reachable" axis): `public`
     /// (internet) or `private` (LAN). Omit to use the server's configured
-    /// default. Only enforced when the server is built with the `zone` feature.
+    /// default. ONLY enforced when the target server has the `zone` feature
+    /// (see `gapes server`); against a server without it the CLI refuses
+    /// `--zone` unless you also pass `--force`.
     #[arg(long, value_parser = ["public", "private"])]
     pub zone: Option<String>,
     /// Required if access=password.
@@ -81,6 +97,10 @@ pub struct DeployArgs {
     /// updates, omit to keep the existing value.
     #[arg(long, value_parser = ["strict", "off"])]
     pub csp: Option<String>,
+    /// Send `--zone` even if the server doesn't advertise the `zone` feature
+    /// (the value will be stored but NOT enforced — you accept the risk).
+    #[arg(long)]
+    pub force: bool,
 }
 
 #[derive(Debug, Args)]
@@ -99,12 +119,14 @@ pub struct StatsArgs {
 pub struct ShareArgs {
     pub uuid: String,
     /// Change the auth method (the "who" axis). `noauth` removes the gate and
-    /// is destructive (step-up). Mutually exclusive with `--password`.
+    /// is destructive — it drives a step-up you must confirm in a browser.
+    /// Mutually exclusive with `--password`.
     #[arg(long, value_parser = ["password", "noauth"], conflicts_with = "password")]
     pub access: Option<String>,
     /// Change the network reach (the "where" axis). `public` exposes the page
-    /// to the internet and is destructive (step-up); `private` pins it to the
-    /// LAN. Only enforced on servers built with the `zone` feature.
+    /// to the internet and is destructive (browser step-up); `private` pins it
+    /// to the LAN. ONLY enforced on servers with the `zone` feature
+    /// (see `gapes server`); otherwise the CLI refuses unless `--force`.
     #[arg(long, value_parser = ["public", "private"])]
     pub zone: Option<String>,
     /// Set access=password with this secret (rotates the password if already set).
@@ -115,6 +137,10 @@ pub struct ShareArgs {
     /// alongside the other flags.
     #[arg(long, value_parser = ["strict", "off"])]
     pub csp: Option<String>,
+    /// Send `--zone` even if the server doesn't advertise the `zone` feature
+    /// (stored but NOT enforced).
+    #[arg(long)]
+    pub force: bool,
 }
 
 #[derive(Debug, Args)]

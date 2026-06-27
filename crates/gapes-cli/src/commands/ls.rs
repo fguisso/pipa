@@ -1,4 +1,4 @@
-//! `gapes ls` — list pages owned by this account.
+//! `gapes ls` — list pages owned by this account (or JSON with --json).
 
 use anyhow::Result;
 use tabled::settings::{Style, object::Rows};
@@ -27,9 +27,14 @@ struct Row {
     updated: String,
 }
 
-pub async fn run() -> Result<()> {
+pub async fn run(json: bool) -> Result<()> {
     let (client, _server, access) = client_with_access("read:*").await?;
     let resp = client.list_pages(&access).await?;
+
+    if json {
+        println!("{}", serde_json::to_string_pretty(&resp.pages)?);
+        return Ok(());
+    }
 
     if resp.pages.is_empty() {
         println!("no pages yet — `gapes deploy <dir>` to create one");

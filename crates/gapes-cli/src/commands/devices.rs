@@ -70,6 +70,7 @@ pub async fn run(args: DevicesArgs) -> Result<()> {
                     &format!("REVOKE device {id}"),
                     "device.revoke",
                     Some(&id),
+                    false,
                 )
                 .await?;
                 Some(outcome.code)

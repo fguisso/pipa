@@ -17,7 +17,6 @@ gapes-sdk = { path = "../gapes-sdk" }
 
 anyhow.workspace = true
 clap.workspace = true
-keyring.workspace = true
 qrcode.workspace = true
 reqwest.workspace = true
 serde.workspace = true
@@ -36,3 +35,16 @@ which.workspace = true
 nu-ansi-term.workspace = true
 tabled.workspace = true
 url.workspace = true
+
+# keyring backend per platform. macOS/Windows use the native keychain;
+# Linux uses no secret-service backend (avoids the libdbus system dep so the
+# released static binaries build & run anywhere) and falls back to the
+# file credstore (~/.config/gapes/auth.toml, chmod 600).
+[target.'cfg(target_os = "macos")'.dependencies]
+keyring = { workspace = true, features = ["apple-native"] }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+keyring = { workspace = true, features = ["windows-native"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+keyring = { workspace = true }

@@ -1,0 +1,47 @@
+name: pages
+
+# Publish the CLI installer to GitHub Pages so
+#   curl -fsSL https://guisso.dev/gapes/install.sh | sh
+# works. All actions here are first-party (the `actions` org).
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - install.sh
+      - .github/workflows/pages.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Stage site
+        run: |
+          set -eu
+          mkdir -p _site
+          cp install.sh _site/install.sh
+          printf '%s\n' \
+            '<!doctype html><meta charset="utf-8"><title>gapes</title>' \
+            '<p>Install the gapes CLI:</p>' \
+            '<pre>curl -fsSL https://guisso.dev/gapes/install.sh | sh</pre>' \
+            > _site/index.html
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deployment
+        uses: actions/deploy-pages@v4

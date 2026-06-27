@@ -20,7 +20,7 @@ pub struct StepUpOutcome {
 ///
 /// `intent` is a human-readable label printed in the box (e.g. `DELETE page
 /// 01HXYZ`). `operation`/`target` are the literals the server expects (see
-/// the route handlers — `page.delete`, `page.visibility_change`,
+/// the route handlers — `page.delete`, `page.weaken_security`,
 /// `device.revoke`).
 pub async fn drive(
     client: &Client,

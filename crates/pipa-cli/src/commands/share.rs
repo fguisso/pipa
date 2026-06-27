@@ -1,6 +1,8 @@
-//! `pipa share <uuid> [--public|--private|--password <secret>] [--csp strict|off]`
-//! — change a page's visibility and/or CSP knob. Going public is destructive
-//! and drives step-up; private / password / csp-only are straight admin calls.
+//! `pipa share <uuid> [--access password|noauth] [--zone public|private]
+//! [--password <secret>] [--csp strict|off]` — change a page's access method,
+//! network zone, and/or CSP knob. Loosening security (access→noauth or
+//! zone→public) is destructive and drives step-up; tightening and csp-only
+//! edits are straight admin calls.
 
 use anyhow::{Result, bail};
 
@@ -10,93 +12,57 @@ use crate::output::{check, kv};
 use crate::stepup;
 
 pub async fn run(args: ShareArgs) -> Result<()> {
-    let visibility_changes =
-        (args.public as u8) + (args.private as u8) + (args.password.is_some() as u8);
-    if visibility_changes > 1 {
-        bail!("--public, --private, --password are mutually exclusive");
-    }
-    if visibility_changes == 0 && args.csp.is_none() {
-        bail!("pass one of --public, --private, --password <secret>, or --csp <strict|off>");
+    // `--password` implies access=password (and rotates the secret).
+    let access: Option<&str> = if args.password.is_some() {
+        Some("password")
+    } else {
+        args.access.as_deref()
+    };
+    let zone = args.zone.as_deref();
+
+    if access.is_none() && zone.is_none() && args.csp.is_none() {
+        bail!("pass at least one of --access, --zone, --password <secret>, or --csp <strict|off>");
     }
 
-    if args.public {
-        // Destructive: needs destroy:<uuid> + step-up.
-        let (client, _server, access) = client_with_access(&format!("destroy:{}", args.uuid)).await?;
+    // Loosening security needs destroy:<uuid> + step-up; otherwise admin:<uuid>.
+    let loosening = access == Some("noauth") || zone == Some("public");
+    let scope = if loosening {
+        format!("destroy:{}", args.uuid)
+    } else {
+        format!("admin:{}", args.uuid)
+    };
+    let (client, _server, token) = client_with_access(&scope).await?;
+
+    let stepup_code = if loosening {
         let outcome = stepup::drive(
             &client,
-            &access,
-            &format!("MAKE PUBLIC page {}", args.uuid),
-            "page.visibility_change",
+            &token,
+            &format!("LOOSEN security on page {}", args.uuid),
+            "page.weaken_security",
             Some(&args.uuid),
         )
         .await?;
-        let view = client
-            .set_visibility(
-                &access,
-                &args.uuid,
-                Some("public"),
-                None,
-                args.csp.as_deref(),
-                Some(&outcome.code),
-            )
-            .await?;
-        println!("{} now public", check());
-        println!("{}", kv("uuid", &view.uuid));
-        println!("{}", kv("visibility", &view.visibility));
-        println!("{}", kv("csp", &view.csp));
-        return Ok(());
-    }
+        Some(outcome.code)
+    } else {
+        None
+    };
 
-    if args.private {
-        let (client, _server, access) = client_with_access(&format!("admin:{}", args.uuid)).await?;
-        let view = client
-            .set_visibility(
-                &access,
-                &args.uuid,
-                Some("private"),
-                None,
-                args.csp.as_deref(),
-                None,
-            )
-            .await?;
-        println!("{} now private", check());
-        println!("{}", kv("uuid", &view.uuid));
-        println!("{}", kv("visibility", &view.visibility));
-        println!("{}", kv("csp", &view.csp));
-        return Ok(());
-    }
+    let view = client
+        .set_access(
+            &token,
+            &args.uuid,
+            access,
+            zone,
+            args.password.as_deref(),
+            args.csp.as_deref(),
+            stepup_code.as_deref(),
+        )
+        .await?;
 
-    if let Some(pw) = args.password.as_deref() {
-        let (client, _server, access) = client_with_access(&format!("admin:{}", args.uuid)).await?;
-        let view = client
-            .set_visibility(
-                &access,
-                &args.uuid,
-                Some("password"),
-                Some(pw),
-                args.csp.as_deref(),
-                None,
-            )
-            .await?;
-        println!("{} password protection enabled", check());
-        println!("{}", kv("uuid", &view.uuid));
-        println!("{}", kv("visibility", &view.visibility));
-        println!("{}", kv("csp", &view.csp));
-        return Ok(());
-    }
-
-    // csp-only path: visibility flags not set, but `--csp` was supplied.
-    if let Some(csp) = args.csp.as_deref() {
-        let (client, _server, access) = client_with_access(&format!("admin:{}", args.uuid)).await?;
-        let view = client
-            .set_visibility(&access, &args.uuid, None, None, Some(csp), None)
-            .await?;
-        println!("{} csp set to {csp}", check());
-        println!("{}", kv("uuid", &view.uuid));
-        println!("{}", kv("visibility", &view.visibility));
-        println!("{}", kv("csp", &view.csp));
-        return Ok(());
-    }
-
-    unreachable!()
+    println!("{} updated", check());
+    println!("{}", kv("uuid", &view.uuid));
+    println!("{}", kv("access", &view.access));
+    println!("{}", kv("zone", &view.zone));
+    println!("{}", kv("csp", &view.csp));
+    Ok(())
 }

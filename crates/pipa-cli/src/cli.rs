@@ -63,10 +63,16 @@ pub struct DeployArgs {
     /// Hosting mode.
     #[arg(long, value_parser = ["static", "spa"])]
     pub mode: Option<String>,
-    /// Visibility on create. For updates, omit to keep existing.
-    #[arg(long, value_parser = ["private", "public", "password"])]
-    pub visibility: Option<String>,
-    /// Required if visibility=password.
+    /// Auth method on create (the "who can open it" axis). Defaults to
+    /// `password` (secure by default). For updates, omit to keep existing.
+    #[arg(long, value_parser = ["password", "noauth"])]
+    pub access: Option<String>,
+    /// Network reach on create (the "where it's reachable" axis): `public`
+    /// (internet) or `private` (LAN). Omit to use the server's configured
+    /// default. Only enforced when the server is built with the `zone` feature.
+    #[arg(long, value_parser = ["public", "private"])]
+    pub zone: Option<String>,
+    /// Required if access=password.
     #[arg(long)]
     pub password: Option<String>,
     /// Content-Security-Policy strictness. `strict` (default on create) emits
@@ -92,15 +98,21 @@ pub struct StatsArgs {
 #[derive(Debug, Args)]
 pub struct ShareArgs {
     pub uuid: String,
-    #[arg(long, conflicts_with_all = ["private", "password"])]
-    pub public: bool,
-    #[arg(long, conflicts_with_all = ["public", "password"])]
-    pub private: bool,
+    /// Change the auth method (the "who" axis). `noauth` removes the gate and
+    /// is destructive (step-up). Mutually exclusive with `--password`.
+    #[arg(long, value_parser = ["password", "noauth"], conflicts_with = "password")]
+    pub access: Option<String>,
+    /// Change the network reach (the "where" axis). `public` exposes the page
+    /// to the internet and is destructive (step-up); `private` pins it to the
+    /// LAN. Only enforced on servers built with the `zone` feature.
+    #[arg(long, value_parser = ["public", "private"])]
+    pub zone: Option<String>,
+    /// Set access=password with this secret (rotates the password if already set).
     #[arg(long)]
     pub password: Option<String>,
     /// Per-page CSP knob: `strict` (default) emits the platform CSP, `off`
     /// suppresses it. Non-destructive, no step-up. Can be passed alone or
-    /// alongside `--public`/`--private`/`--password`.
+    /// alongside the other flags.
     #[arg(long, value_parser = ["strict", "off"])]
     pub csp: Option<String>,
 }

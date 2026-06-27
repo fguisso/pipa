@@ -45,3 +45,27 @@ impl FromRequestParts<AppState> for RealIp {
         Ok(RealIp(peer_ip))
     }
 }
+
+/// The TCP peer address of the request — i.e. the reverse proxy that fronts
+/// the server, NOT the end client (that's [`RealIp`]). Used by zone detection
+/// to tell the internal proxy apart from the external tunnel. `None` when no
+/// `ConnectInfo` is wired up (e.g. some test harnesses), which zone detection
+/// treats as the external zone.
+#[derive(Debug, Clone)]
+pub struct ProxyPeer(pub Option<String>);
+
+#[axum::async_trait]
+impl FromRequestParts<AppState> for ProxyPeer {
+    type Rejection = std::convert::Infallible;
+
+    async fn from_request_parts(
+        parts: &mut Parts,
+        _state: &AppState,
+    ) -> Result<Self, Self::Rejection> {
+        let peer_ip = parts
+            .extensions
+            .get::<ConnectInfo<SocketAddr>>()
+            .map(|ci| ci.0.ip().to_string());
+        Ok(ProxyPeer(peer_ip))
+    }
+}

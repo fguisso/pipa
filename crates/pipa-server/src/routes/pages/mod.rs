@@ -1,6 +1,7 @@
-//! `/api/pages/*` — deploy, list, get, delete, visibility change, stats.
+//! `/api/pages/*` — deploy, list, get, delete, access/zone change, stats.
 //! Step-up confirmation is required for destructive operations (delete and
-//! private->public visibility change), matching SECURITY.md §3.
+//! loosening a page's security — access→noauth or zone→public), matching
+//! SECURITY.md §3.
 
 use axum::Router;
 use axum::routing::{delete as delete_route, get, post};
@@ -8,11 +9,11 @@ use tower_http::limit::RequestBodyLimitLayer;
 
 use crate::state::AppState;
 
+mod access;
 mod deploy;
 mod delete;
 mod list_get;
 mod stats;
-mod visibility;
 
 pub(crate) mod util;
 
@@ -33,9 +34,6 @@ pub fn router(state: &AppState) -> Router<AppState> {
         .route("/api/pages", get(list_get::list_pages))
         .route("/api/pages/:uuid", get(list_get::get_page))
         .route("/api/pages/:uuid", delete_route(delete::delete_page))
-        .route(
-            "/api/pages/:uuid/visibility",
-            post(visibility::change_visibility),
-        )
+        .route("/api/pages/:uuid/access", post(access::change_access))
         .route("/api/pages/:uuid/stats", get(stats::stats))
 }

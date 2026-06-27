@@ -58,6 +58,11 @@ serde_json.workspace = true
 
 [features]
 default = []
+# Per-page network-reach gating (zone = public|private). Off by default: when
+# absent the server serves every page on whatever front-end reaches it (legacy
+# behavior) and carries no zone-detection middleware. Requires an internal
+# reverse proxy + the [zone] config section to be useful.
+zone = []
 # Phase 5 toggles, not implemented yet:
 multi-tenant = []
 pg = []

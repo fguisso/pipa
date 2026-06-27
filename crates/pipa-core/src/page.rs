@@ -31,34 +31,66 @@ impl FromStr for Mode {
     }
 }
 
+/// How a visitor authenticates to open a page — the "who can enter" axis.
+/// Orthogonal to [`Zone`] (the "where is it reachable" axis). `Password`
+/// (the secure default) gates the page behind a shared secret; `Noauth`
+/// serves it to anyone who can reach it. Future methods (SSO, social, magic
+/// link) slot in here behind their own Cargo features.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
-pub enum Visibility {
-    Private,
-    Public,
+pub enum Access {
     Password,
+    Noauth,
 }
 
-impl Visibility {
+impl Access {
     pub fn as_str(&self) -> &'static str {
         match self {
-            Visibility::Private => "private",
-            Visibility::Public => "public",
-            Visibility::Password => "password",
+            Access::Password => "password",
+            Access::Noauth => "noauth",
         }
     }
 }
 
-impl FromStr for Visibility {
+impl FromStr for Access {
     type Err = CoreError;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
-            "private" => Ok(Visibility::Private),
-            "public" => Ok(Visibility::Public),
-            "password" => Ok(Visibility::Password),
-            other => Err(CoreError::InvalidInput(format!(
-                "unknown visibility: {other}"
-            ))),
+            "password" => Ok(Access::Password),
+            "noauth" => Ok(Access::Noauth),
+            other => Err(CoreError::InvalidInput(format!("unknown access: {other}"))),
+        }
+    }
+}
+
+/// Where a page is reachable — the "which network" axis, enforced as an exact
+/// match: a `Private` page serves only on the internal (LAN) channel, a
+/// `Public` page only on the external (internet) channel. Enforcement lives behind
+/// the `zone` Cargo feature in `pipa-server`; the field is always stored so
+/// the schema stays build-compatible. Designed to grow past two values later.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Zone {
+    Public,
+    Private,
+}
+
+impl Zone {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Zone::Public => "public",
+            Zone::Private => "private",
+        }
+    }
+}
+
+impl FromStr for Zone {
+    type Err = CoreError;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "public" => Ok(Zone::Public),
+            "private" => Ok(Zone::Private),
+            other => Err(CoreError::InvalidInput(format!("unknown zone: {other}"))),
         }
     }
 }
@@ -100,7 +132,8 @@ pub struct Page {
     pub uuid: String,
     pub name: Option<String>,
     pub mode: Mode,
-    pub visibility: Visibility,
+    pub access: Access,
+    pub zone: Zone,
     pub password_hash: Option<String>,
     pub owner_kind: String,
     pub owner_id: String,
@@ -120,7 +153,8 @@ pub struct NewPage {
     pub uuid: String,
     pub name: Option<String>,
     pub mode: Mode,
-    pub visibility: Visibility,
+    pub access: Access,
+    pub zone: Zone,
     pub password_hash: Option<String>,
     pub owner_kind: String,
     pub owner_id: String,

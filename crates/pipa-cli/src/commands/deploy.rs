@@ -79,7 +79,8 @@ pub async fn run(args: DeployArgs) -> Result<()> {
         uuid: args.uuid.clone(),
         mode: args.mode.clone(),
         name: args.name.clone(),
-        visibility: args.visibility.clone(),
+        access: args.access.clone(),
+        zone: args.zone.clone(),
         password: args.password.clone(),
         csp: args.csp.clone(),
     };
@@ -106,7 +107,8 @@ pub async fn run(args: DeployArgs) -> Result<()> {
     println!("{}", kv("size", &human_bytes(resp.size_bytes)));
     println!("{}", kv("files", &resp.file_count.to_string()));
     println!("{}", kv("mode", &resp.mode));
-    println!("{}", kv("visibility", &resp.visibility));
+    println!("{}", kv("access", &resp.access));
+    println!("{}", kv("zone", &resp.zone));
     println!("{}", kv("csp", &resp.csp));
     Ok(())
 }

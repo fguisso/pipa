@@ -92,7 +92,7 @@ async fn html_response_includes_widget_when_enabled() {
                 .mime_str("application/zip")
                 .expect("mime"),
         )
-        .text("visibility", "public");
+        .text("access", "noauth");
     let deploy: Value = client
         .post(format!("{base}/api/pages"))
         .bearer_auth(&access)

@@ -41,17 +41,18 @@ impl Repository for SqliteRepository {
         sqlx::query(
             r#"
             INSERT INTO pages (
-                uuid, name, mode, visibility, password_hash,
+                uuid, name, mode, access, zone, password_hash,
                 owner_kind, owner_id, size_bytes, file_count,
                 comments_enabled, comments_require_approval,
                 csp, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?)
             "#,
         )
         .bind(&p.uuid)
         .bind(&p.name)
         .bind(p.mode.as_str())
-        .bind(p.visibility.as_str())
+        .bind(p.access.as_str())
+        .bind(p.zone.as_str())
         .bind(&p.password_hash)
         .bind(&p.owner_kind)
         .bind(&p.owner_id)
@@ -75,7 +76,7 @@ impl Repository for SqliteRepository {
         let res = sqlx::query(
             r#"
             UPDATE pages SET
-                name = ?, mode = ?, visibility = ?, password_hash = ?,
+                name = ?, mode = ?, access = ?, zone = ?, password_hash = ?,
                 owner_kind = ?, owner_id = ?, size_bytes = ?, file_count = ?,
                 comments_enabled = ?, comments_require_approval = ?,
                 csp = ?,
@@ -85,7 +86,8 @@ impl Repository for SqliteRepository {
         )
         .bind(&p.name)
         .bind(p.mode.as_str())
-        .bind(p.visibility.as_str())
+        .bind(p.access.as_str())
+        .bind(p.zone.as_str())
         .bind(&p.password_hash)
         .bind(&p.owner_kind)
         .bind(&p.owner_id)

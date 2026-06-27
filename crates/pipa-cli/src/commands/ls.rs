@@ -13,8 +13,10 @@ struct Row {
     uuid: String,
     #[tabled(rename = "NAME")]
     name: String,
-    #[tabled(rename = "VIS")]
-    vis: String,
+    #[tabled(rename = "ACCESS")]
+    access: String,
+    #[tabled(rename = "ZONE")]
+    zone: String,
     #[tabled(rename = "MODE")]
     mode: String,
     #[tabled(rename = "SIZE")]
@@ -40,7 +42,8 @@ pub async fn run() -> Result<()> {
         .map(|p| Row {
             uuid: p.uuid.clone(),
             name: p.name.clone().unwrap_or_else(|| "—".into()),
-            vis: p.visibility.clone(),
+            access: p.access.clone(),
+            zone: p.zone.clone(),
             mode: p.mode.clone(),
             size: human_bytes(p.size_bytes),
             files: p.file_count.to_string(),

@@ -36,7 +36,8 @@
             <td x-text="p.name || '—'"></td>
             <td x-text="p.mode"></td>
             <td>
-              <span class="gpa-pill" :class="'gpa-pill--' + p.visibility" x-text="p.visibility"></span>
+              <span class="gpa-pill" :class="'gpa-pill--' + p.access" x-text="p.access"></span>
+              <span class="gpa-pill" :class="'gpa-pill--' + p.zone" x-text="p.zone"></span>
               <template x-if="p.archived">
                 <span class="gpa-pill gpa-pill--archived">archived</span>
               </template>

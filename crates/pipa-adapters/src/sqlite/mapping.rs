@@ -6,7 +6,7 @@ use pipa_core::device::{
     Admin, Device, DevicePairing, OwnerSession, RefreshToken, Scope, SetupCode, StepUpToken,
 };
 use pipa_core::error::{CoreError, Result};
-use pipa_core::page::{Csp, Mode, Page, Visibility};
+use pipa_core::page::{Access, Csp, Mode, Page, Zone};
 use sqlx::Row;
 use sqlx::sqlite::SqliteRow;
 
@@ -14,9 +14,12 @@ pub fn page_from_row(row: &SqliteRow) -> Result<Page> {
     let mode_s: String = row
         .try_get("mode")
         .map_err(|e| CoreError::RepositoryFailure(format!("page.mode: {e}")))?;
-    let visibility_s: String = row
-        .try_get("visibility")
-        .map_err(|e| CoreError::RepositoryFailure(format!("page.visibility: {e}")))?;
+    let access_s: String = row
+        .try_get("access")
+        .map_err(|e| CoreError::RepositoryFailure(format!("page.access: {e}")))?;
+    let zone_s: String = row
+        .try_get("zone")
+        .map_err(|e| CoreError::RepositoryFailure(format!("page.zone: {e}")))?;
     let csp_s: String = row
         .try_get("csp")
         .map_err(|e| CoreError::RepositoryFailure(format!("page.csp: {e}")))?;
@@ -24,7 +27,8 @@ pub fn page_from_row(row: &SqliteRow) -> Result<Page> {
         uuid: get(row, "uuid")?,
         name: opt(row, "name")?,
         mode: Mode::from_str(&mode_s)?,
-        visibility: Visibility::from_str(&visibility_s)?,
+        access: Access::from_str(&access_s)?,
+        zone: Zone::from_str(&zone_s)?,
         password_hash: opt(row, "password_hash")?,
         owner_kind: get(row, "owner_kind")?,
         owner_id: get(row, "owner_id")?,

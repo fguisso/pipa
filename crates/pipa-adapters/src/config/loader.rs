@@ -13,6 +13,7 @@ pub struct Config {
     pub admin: AdminConfig,
     pub auth: AuthConfig,
     pub comments: CommentsConfig,
+    pub zone: ZoneConfig,
 }
 
 impl Default for Config {
@@ -24,6 +25,33 @@ impl Default for Config {
             admin: AdminConfig::default(),
             auth: AuthConfig::default(),
             comments: CommentsConfig::default(),
+            zone: ZoneConfig::default(),
+        }
+    }
+}
+
+/// Zone (network-reach) configuration. Only consumed when the `zone` feature
+/// is compiled into `pipa-server`; the struct is always parsed so a single
+/// `pages.toml` works against both feature builds. `default` is the zone new
+/// deploys land in when the caller omits `--zone` ("public" | "private",
+/// fallback "private" = secure by default). A request counts as the internal
+/// (LAN) zone when its proxy peer IP is in `internal_proxy_ips` AND its `Host`
+/// matches `internal_hosts` (supports a leading `*.` wildcard); otherwise it
+/// is treated as the external (internet) zone.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ZoneConfig {
+    pub default: String,
+    pub internal_proxy_ips: Vec<String>,
+    pub internal_hosts: Vec<String>,
+}
+
+impl Default for ZoneConfig {
+    fn default() -> Self {
+        Self {
+            default: "private".to_string(),
+            internal_proxy_ips: Vec::new(),
+            internal_hosts: Vec::new(),
         }
     }
 }

@@ -14,7 +14,8 @@ pub async fn run(args: GetArgs) -> Result<()> {
     println!("{}", kv("uuid", &page.uuid));
     println!("{}", kv("name", page.name.as_deref().unwrap_or("—")));
     println!("{}", kv("mode", &page.mode));
-    println!("{}", kv("visibility", &page.visibility));
+    println!("{}", kv("access", &page.access));
+    println!("{}", kv("zone", &page.zone));
     println!("{}", kv("size", &human_bytes(page.size_bytes)));
     println!("{}", kv("files", &page.file_count.to_string()));
     println!("{}", kv("comments", &format!("enabled={} approval={}", page.comments_enabled, page.comments_require_approval)));

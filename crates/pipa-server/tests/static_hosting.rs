@@ -8,7 +8,7 @@ use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use pipa_adapters::hash_password;
-use pipa_core::page::{Csp, Mode, NewPage, Visibility};
+use pipa_core::page::{Access, Csp, Mode, NewPage, Zone};
 
 use crate::common::{spawn_test_server, TestServer};
 
@@ -25,10 +25,10 @@ async fn seed_page_with_index(
     uuid: &str,
     body: &str,
     mode: Mode,
-    visibility: Visibility,
+    access: Access,
     password_plaintext: Option<&str>,
 ) {
-    seed_page_with_index_csp(server, uuid, body, mode, visibility, password_plaintext, Csp::Strict)
+    seed_page_with_index_csp(server, uuid, body, mode, access, password_plaintext, Csp::Strict)
         .await;
 }
 
@@ -38,7 +38,7 @@ async fn seed_page_with_index_csp(
     uuid: &str,
     body: &str,
     mode: Mode,
-    visibility: Visibility,
+    access: Access,
     password_plaintext: Option<&str>,
     csp: Csp,
 ) {
@@ -56,7 +56,8 @@ async fn seed_page_with_index_csp(
             uuid: uuid.into(),
             name: None,
             mode,
-            visibility,
+            access,
+            zone: Zone::Public,
             password_hash,
             owner_kind: "local".into(),
             owner_id: "local".into(),
@@ -75,7 +76,7 @@ async fn public_page_serves_index_with_csp() {
     let server = spawn_test_server().await;
     let uuid = "01HXYZTEST00000000PAGE0001";
     let body = "<h1>hello world</h1>";
-    seed_page_with_index(&server, uuid, body, Mode::Static, Visibility::Public, None).await;
+    seed_page_with_index(&server, uuid, body, Mode::Static, Access::Noauth, None).await;
 
     let client = reqwest::Client::new();
     let resp = client
@@ -105,7 +106,7 @@ async fn spa_mode_falls_back_to_index_for_missing_path() {
         uuid,
         "<h1>spa root</h1>",
         Mode::Spa,
-        Visibility::Public,
+        Access::Noauth,
         None,
     )
     .await;
@@ -130,7 +131,7 @@ async fn static_mode_returns_404_for_missing_path() {
         uuid,
         "<h1>static root</h1>",
         Mode::Static,
-        Visibility::Public,
+        Access::Noauth,
         None,
     )
     .await;
@@ -145,7 +146,7 @@ async fn static_mode_returns_404_for_missing_path() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn private_page_returns_404() {
+async fn archived_page_returns_404() {
     let server = spawn_test_server().await;
     let uuid = "01HXYZTEST00000000PAGE0004";
     seed_page_with_index(
@@ -153,10 +154,18 @@ async fn private_page_returns_404() {
         uuid,
         "<h1>secret</h1>",
         Mode::Static,
-        Visibility::Private,
+        Access::Noauth,
         None,
     )
     .await;
+    // Archiving unpublishes the page — the role the legacy `private` value used
+    // to play. It must 404 (not 401/403) to avoid leaking existence.
+    server
+        .state
+        .repo
+        .set_page_archived(uuid, true)
+        .await
+        .expect("archive");
 
     let client = reqwest::Client::new();
     let resp = client
@@ -167,7 +176,7 @@ async fn private_page_returns_404() {
     assert_eq!(
         resp.status().as_u16(),
         404,
-        "private pages must 404, not 401/403, to avoid leaking existence"
+        "archived pages must 404, not 401/403, to avoid leaking existence"
     );
 }
 
@@ -180,7 +189,7 @@ async fn password_page_gates_then_serves_with_cookie() {
         uuid,
         "<h1>members only</h1>",
         Mode::Static,
-        Visibility::Password,
+        Access::Password,
         Some("hunter2"),
     )
     .await;
@@ -269,7 +278,7 @@ async fn redirect_no_trailing_slash() {
         uuid,
         "<h1>hello</h1>",
         Mode::Static,
-        Visibility::Public,
+        Access::Noauth,
         None,
     )
     .await;
@@ -319,7 +328,7 @@ async fn csp_off_omits_header() {
         uuid,
         "<h1>csp off</h1>",
         Mode::Static,
-        Visibility::Public,
+        Access::Noauth,
         None,
         Csp::Off,
     )
@@ -350,7 +359,7 @@ async fn csp_strict_still_emits_header() {
         uuid,
         "<h1>csp strict</h1>",
         Mode::Static,
-        Visibility::Public,
+        Access::Noauth,
         None,
         Csp::Strict,
     )

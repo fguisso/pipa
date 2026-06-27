@@ -108,7 +108,7 @@ async fn full_round_trip() {
                 .mime_str("application/zip")
                 .expect("mime"),
         )
-        .text("visibility", "public");
+        .text("access", "noauth");
     let resp = client
         .post(format!("{base}/api/pages"))
         .bearer_auth(&access)
@@ -125,7 +125,7 @@ async fn full_round_trip() {
     );
     let deploy: Value = resp.json().await.expect("deploy json");
     let uuid = deploy["uuid"].as_str().expect("uuid").to_string();
-    assert_eq!(deploy["visibility"].as_str(), Some("public"));
+    assert_eq!(deploy["access"].as_str(), Some("noauth"));
     assert!(deploy["url"].as_str().unwrap_or("").ends_with(&uuid));
 
     // ── 7. Public GET serves the index ───────────────────────────────────
@@ -137,29 +137,33 @@ async fn full_round_trip() {
     assert_eq!(resp.status().as_u16(), 200);
     assert!(resp.text().await.expect("text").contains("hello from e2e"));
 
-    // ── 8. Flip to private — requires admin:<uuid>, no step-up ───────────
+    // ── 8. Tighten access → password — requires admin:<uuid>, no step-up ──
     let admin = mint_access(&server.state, &device_id, &format!("admin:{uuid}"), 60);
     let resp = client
-        .post(format!("{base}/api/pages/{uuid}/visibility"))
+        .post(format!("{base}/api/pages/{uuid}/access"))
         .bearer_auth(&admin)
-        .json(&json!({ "visibility": "private" }))
+        .json(&json!({ "access": "password", "password": "hunter2" }))
         .send()
         .await
-        .expect("visibility");
+        .expect("access");
     assert_eq!(
         resp.status().as_u16(),
         200,
-        "visibility flip expected 200, body {}",
+        "access change expected 200, body {}",
         resp.text().await.unwrap_or_default()
     );
 
-    // ── 9. /p/<uuid>/ now 404s ───────────────────────────────────────────
+    // ── 9. /p/<uuid>/ now shows the password gate, not the content ───────
     let resp = client
         .get(format!("{base}/p/{uuid}/"))
         .send()
         .await
-        .expect("post-private get");
-    assert_eq!(resp.status().as_u16(), 404, "private page must 404");
+        .expect("post-gate get");
+    assert_eq!(resp.status().as_u16(), 200, "password gate renders 200");
+    assert!(
+        !resp.text().await.expect("text").contains("hello from e2e"),
+        "gated page must not leak its content without the password"
+    );
 
     // ── 10. Mint destroy:<uuid> + step-up + DELETE ──────────────────────
     let destroy = mint_access(&server.state, &device_id, &format!("destroy:{uuid}"), 60);

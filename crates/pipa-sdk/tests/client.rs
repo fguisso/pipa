@@ -99,7 +99,8 @@ async fn deploy(
             "size_bytes": 12u64,
             "file_count": 1u64,
             "mode": "spa",
-            "visibility": "public",
+            "access": "noauth",
+            "zone": "public",
         })),
     )
 }
@@ -129,7 +130,8 @@ async fn get_one(
         "uuid": uuid,
         "name": null,
         "mode": "spa",
-        "visibility": "public",
+        "access": "noauth",
+        "zone": "public",
         "owner_kind": "local",
         "owner_id": "local",
         "size_bytes": 12u64,
@@ -173,14 +175,15 @@ async fn deploy_archive_sends_multipart_with_bearer() {
             "ACCESS_TOK",
             zip_bytes.clone(),
             DeployParams {
-                visibility: Some("public".into()),
+                access: Some("noauth".into()),
+                zone: Some("public".into()),
                 ..Default::default()
             },
         )
         .await
         .expect("deploy_archive");
     assert_eq!(resp.uuid, "01HXYZTEST00000000DEPLOY");
-    assert_eq!(resp.visibility, "public");
+    assert_eq!(resp.access, "noauth");
 
     let bearer = spy.deploy_bearer.lock().unwrap().clone();
     assert_eq!(bearer.as_deref(), Some("Bearer ACCESS_TOK"));
@@ -230,7 +233,8 @@ async fn get_page_parses_page_view_response() {
     let pv = client.get_page("ACC", "01HXYZ_PAGE").await.expect("get_page");
     assert_eq!(pv.uuid, "01HXYZ_PAGE");
     assert_eq!(pv.mode, "spa");
-    assert_eq!(pv.visibility, "public");
+    assert_eq!(pv.access, "noauth");
+    assert_eq!(pv.zone, "public");
     assert_eq!(pv.size_bytes, 12);
     assert_eq!(pv.file_count, 1);
 }

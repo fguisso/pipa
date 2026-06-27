@@ -8,7 +8,7 @@ use crate::audit::AuditAction;
 use crate::comment::CommentStatus;
 use crate::device::Scope;
 use crate::error::CoreError;
-use crate::page::{Mode, Visibility};
+use crate::page::{Access, Mode, Zone};
 
 #[test]
 fn mode_round_trip() {
@@ -28,18 +28,35 @@ fn mode_rejects_garbage() {
 }
 
 #[test]
-fn visibility_round_trip() {
-    for v in [Visibility::Private, Visibility::Public, Visibility::Password] {
-        let s = v.as_str();
-        let parsed: Visibility = s.parse().expect("parse visibility");
-        assert_eq!(parsed, v, "round trip {s}");
+fn access_round_trip() {
+    for a in [Access::Password, Access::Noauth] {
+        let s = a.as_str();
+        let parsed: Access = s.parse().expect("parse access");
+        assert_eq!(parsed, a, "round trip {s}");
     }
 }
 
 #[test]
-fn visibility_rejects_garbage() {
-    for bad in ["", "PRIVATE", "Public", "secret", "pass word"] {
-        let err = Visibility::from_str(bad).expect_err(&format!("garbage {bad:?}"));
+fn access_rejects_garbage() {
+    for bad in ["", "PASSWORD", "Noauth", "secret", "pass word"] {
+        let err = Access::from_str(bad).expect_err(&format!("garbage {bad:?}"));
+        assert!(matches!(err, CoreError::InvalidInput(_)));
+    }
+}
+
+#[test]
+fn zone_round_trip() {
+    for z in [Zone::Public, Zone::Private] {
+        let s = z.as_str();
+        let parsed: Zone = s.parse().expect("parse zone");
+        assert_eq!(parsed, z, "round trip {s}");
+    }
+}
+
+#[test]
+fn zone_rejects_garbage() {
+    for bad in ["", "PUBLIC", "Private", "lan", "internet"] {
+        let err = Zone::from_str(bad).expect_err(&format!("garbage {bad:?}"));
         assert!(matches!(err, CoreError::InvalidInput(_)));
     }
 }
@@ -93,7 +110,8 @@ fn audit_action_round_trip_every_variant() {
         AuditAction::PageCreate,
         AuditAction::PageUpdate,
         AuditAction::PageDelete,
-        AuditAction::PageVisibilityChange,
+        AuditAction::PageAccessChange,
+        AuditAction::PageZoneChange,
         AuditAction::DeviceRevoke,
         AuditAction::CommentCreate,
         AuditAction::CommentApprove,

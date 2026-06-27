@@ -16,8 +16,11 @@
         <div class="gpa-row gpa-row--wrap">
           <div class="gpa-stat"><span class="gpa-stat-k">name</span><span x-text="page.name || '—'"></span></div>
           <div class="gpa-stat"><span class="gpa-stat-k">mode</span><span x-text="page.mode"></span></div>
-          <div class="gpa-stat"><span class="gpa-stat-k">visibility</span>
-            <span class="gpa-pill" :class="'gpa-pill--' + page.visibility" x-text="page.visibility"></span>
+          <div class="gpa-stat"><span class="gpa-stat-k">access</span>
+            <span class="gpa-pill" :class="'gpa-pill--' + page.access" x-text="page.access"></span>
+          </div>
+          <div class="gpa-stat"><span class="gpa-stat-k">zone</span>
+            <span class="gpa-pill" :class="'gpa-pill--' + page.zone" x-text="page.zone"></span>
           </div>
           <div class="gpa-stat"><span class="gpa-stat-k">size</span><span x-text="gpa.fmtBytes(page.size_bytes)"></span></div>
           <div class="gpa-stat"><span class="gpa-stat-k">files</span><span x-text="page.file_count"></span></div>
@@ -25,21 +28,22 @@
         </div>
 
         <section class="gpa-card">
-          <h2>visibility</h2>
+          <h2>access &amp; zone</h2>
           <p class="gpa-muted">
-            switch to <strong>private</strong> or <strong>password</strong> directly.
-            making a page <strong>public</strong> is destructive — use the CLI:
+            tighten <strong>access</strong> (set a password) directly.
+            loosening security — <strong>noauth</strong> or exposing the page to
+            the internet (<strong>zone public</strong>) — is destructive, use the CLI:
           </p>
           <div class="gpa-codecopy">
-            <code x-text="'pipa share ' + page.uuid + ' --public'"></code>
-            <button @click="copy('pipa share ' + page.uuid + ' --public')" class="gpa-btn gpa-btn--ghost">copy</button>
+            <code x-text="'pipa share ' + page.uuid + ' --zone public'"></code>
+            <button @click="copy('pipa share ' + page.uuid + ' --zone public')" class="gpa-btn gpa-btn--ghost">copy</button>
           </div>
           <div class="gpa-row gpa-row--wrap" style="margin-top:0.85rem">
-            <button class="gpa-btn" @click="setVisibility('private')"
-                    :disabled="busy || page.visibility === 'private'">make private</button>
             <button class="gpa-btn" @click="promptPassword()" :disabled="busy">
               set password
             </button>
+            <button class="gpa-btn" @click="setZone('private')"
+                    :disabled="busy || page.zone === 'private'">pin to LAN</button>
           </div>
         </section>
 
@@ -205,10 +209,10 @@
         } catch (e) { /* no comments enabled etc. */ this.comments = []; }
         finally { this.commentsLoading = false; }
       },
-      async setVisibility(v) {
+      async setZone(z) {
         this.busy = true; this.error = '';
         try {
-          this.page = await gpa.apiJson('/api/pages/' + this.page.uuid + '/visibility', 'POST', { visibility: v }, 'admin');
+          this.page = await gpa.apiJson('/api/pages/' + this.page.uuid + '/access', 'POST', { zone: z }, 'admin');
         } catch (e) { this.error = String(e); }
         finally { this.busy = false; }
       },
@@ -217,8 +221,8 @@
         if (!pw) return;
         this.busy = true; this.error = '';
         try {
-          this.page = await gpa.apiJson('/api/pages/' + this.page.uuid + '/visibility', 'POST',
-            { visibility: 'password', password: pw }, 'admin');
+          this.page = await gpa.apiJson('/api/pages/' + this.page.uuid + '/access', 'POST',
+            { access: 'password', password: pw }, 'admin');
         } catch (e) { this.error = String(e); }
         finally { this.busy = false; }
       },

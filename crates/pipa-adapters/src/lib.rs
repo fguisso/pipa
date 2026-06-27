@@ -6,7 +6,7 @@ pub mod crypto;
 pub mod disk;
 pub mod sqlite;
 
-pub use config::{Config, load_config};
+pub use config::{Config, ZoneConfig, load_config};
 pub use crypto::{HmacKey, hash_password, verify_password};
 pub use disk::DiskStorage;
 pub use sqlite::{SqliteAuthStore, SqliteRepository, open_pool, run_migrations};

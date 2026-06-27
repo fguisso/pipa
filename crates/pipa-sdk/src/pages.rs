@@ -53,8 +53,11 @@ impl Client {
         if let Some(v) = params.name {
             form = form.text("name", v);
         }
-        if let Some(v) = params.visibility {
-            form = form.text("visibility", v);
+        if let Some(v) = params.access {
+            form = form.text("access", v);
+        }
+        if let Some(v) = params.zone {
+            form = form.text("zone", v);
         }
         if let Some(v) = params.password {
             form = form.text("password", v);
@@ -88,15 +91,19 @@ impl Client {
         parse_empty(resp).await
     }
 
-    /// `visibility` is one of `private | public | password` (optional — pass
-    /// `None` if you only want to change `csp`). `password` is only consulted
-    /// (and only required) when `visibility == "password"`. `csp` is one of
-    /// `strict | off`. `stepup_code` is required only when moving to `public`.
-    pub async fn set_visibility(
+    /// Change a page's `access` (`password | noauth`) and/or `zone`
+    /// (`public | private`) and/or `csp` (`strict | off`). Pass `None` for a
+    /// field to leave it unchanged. `password` is consulted (and required)
+    /// when `access == "password"`. `stepup_code` is required only when the
+    /// change loosens security (→ `noauth` or → `public`). `token` is the
+    /// bearer access token.
+    #[allow(clippy::too_many_arguments)]
+    pub async fn set_access(
         &self,
-        access: &str,
+        token: &str,
         uuid: &str,
-        visibility: Option<&str>,
+        access: Option<&str>,
+        zone: Option<&str>,
         password: Option<&str>,
         csp: Option<&str>,
         stepup_code: Option<&str>,
@@ -104,21 +111,24 @@ impl Client {
         #[derive(Serialize)]
         struct Body<'a> {
             #[serde(skip_serializing_if = "Option::is_none")]
-            visibility: Option<&'a str>,
+            access: Option<&'a str>,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            zone: Option<&'a str>,
             #[serde(skip_serializing_if = "Option::is_none")]
             password: Option<&'a str>,
             #[serde(skip_serializing_if = "Option::is_none")]
             csp: Option<&'a str>,
         }
         let mut req = self
-            .req(Method::POST, &format!("/api/pages/{uuid}/visibility"))?
-            .bearer_auth(access);
+            .req(Method::POST, &format!("/api/pages/{uuid}/access"))?
+            .bearer_auth(token);
         if let Some(c) = stepup_code {
             req = req.header("X-Stepup-Code", c);
         }
         let resp = req
             .json(&Body {
-                visibility,
+                access,
+                zone,
                 password,
                 csp,
             })

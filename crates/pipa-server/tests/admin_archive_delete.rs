@@ -97,7 +97,7 @@ async fn archive_then_unarchive_then_delete() {
                 .mime_str("application/zip")
                 .expect("mime"),
         )
-        .text("visibility", "public");
+        .text("access", "noauth");
     let deploy: Value = client
         .post(format!("{base}/api/pages"))
         .bearer_auth(&access)

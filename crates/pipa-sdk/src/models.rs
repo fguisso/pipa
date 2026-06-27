@@ -9,7 +9,11 @@ pub struct PageView {
     pub uuid: String,
     pub name: Option<String>,
     pub mode: String,
-    pub visibility: String,
+    /// Auth method: `password` (default) or `noauth` (+future sso/social/link).
+    pub access: String,
+    /// Network reach: `public` or `private`. Older servers omit it.
+    #[serde(default = "default_zone")]
+    pub zone: String,
     pub owner_kind: String,
     pub owner_id: String,
     pub size_bytes: u64,
@@ -30,6 +34,10 @@ fn default_csp() -> String {
     "strict".into()
 }
 
+fn default_zone() -> String {
+    "public".into()
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ListPagesResponse {
     pub pages: Vec<PageView>,
@@ -42,7 +50,9 @@ pub struct DeployResponse {
     pub size_bytes: u64,
     pub file_count: u64,
     pub mode: String,
-    pub visibility: String,
+    pub access: String,
+    #[serde(default = "default_zone")]
+    pub zone: String,
     #[serde(default = "default_csp")]
     pub csp: String,
 }
@@ -52,7 +62,8 @@ pub struct DeployParams {
     pub uuid: Option<String>,
     pub mode: Option<String>,
     pub name: Option<String>,
-    pub visibility: Option<String>,
+    pub access: Option<String>,
+    pub zone: Option<String>,
     pub password: Option<String>,
     pub csp: Option<String>,
 }

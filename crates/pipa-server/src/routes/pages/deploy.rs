@@ -25,7 +25,7 @@ use bytes::Bytes;
 use pipa_adapters::hash_password;
 use pipa_core::audit::{AuditAction, AuditEvent};
 use pipa_core::ids::UlidGen;
-use pipa_core::page::{Csp, Mode, NewPage, Visibility};
+use pipa_core::page::{Access, Csp, Mode, NewPage, Zone};
 use pipa_core::ports::PromotedInfo;
 use pipa_core::{IdGen, Page};
 use serde::Serialize;
@@ -49,7 +49,8 @@ struct Form {
     uuid: Option<String>,
     mode: Option<String>,
     name: Option<String>,
-    visibility: Option<String>,
+    access: Option<String>,
+    zone: Option<String>,
     password: Option<String>,
     csp: Option<String>,
 }
@@ -61,7 +62,8 @@ pub struct DeployResponse {
     pub size_bytes: u64,
     pub file_count: u64,
     pub mode: String,
-    pub visibility: String,
+    pub access: String,
+    pub zone: String,
     pub csp: String,
 }
 
@@ -117,10 +119,10 @@ pub async fn deploy(
         None
     };
 
-    // Mode / visibility resolution: explicit form field wins; otherwise keep
-    // the existing value (update) or fall back to config default / private
-    // (create). Never silently flip a public page back to private just
-    // because the caller didn't re-state the visibility.
+    // Mode / access / zone resolution: explicit form field wins; otherwise keep
+    // the existing value (update) or fall back to the secure create-default.
+    // Never silently loosen a page just because the caller didn't re-state a
+    // field.
     let mode: Mode = match form.mode.as_deref() {
         Some(s) => s.parse().map_err(|_| {
             ApiError::bad_request("invalid_mode", "mode must be static|spa")
@@ -131,17 +133,31 @@ pub async fn deploy(
             .unwrap_or_else(|| state.config.hosting.default_mode.parse().unwrap_or(Mode::Spa)),
     };
 
-    let visibility: Visibility = match form.visibility.as_deref() {
+    // Access defaults to `password` on create (secure by default).
+    let access: Access = match form.access.as_deref() {
         Some(s) => s.parse().map_err(|_| {
-            ApiError::bad_request(
-                "invalid_visibility",
-                "visibility must be private|public|password",
-            )
+            ApiError::bad_request("invalid_access", "access must be password|noauth")
         })?,
         None => existing
             .as_ref()
-            .map(|p| p.visibility)
-            .unwrap_or(Visibility::Private),
+            .map(|p| p.access)
+            .unwrap_or(Access::Password),
+    };
+
+    // Zone defaults, on create, to the server operator's `[zone].default`
+    // (fallback `private` = secure). Bad config value also falls back to private.
+    let zone: Zone = match form.zone.as_deref() {
+        Some(s) => s.parse().map_err(|_| {
+            ApiError::bad_request("invalid_zone", "zone must be public|private")
+        })?,
+        None => existing.as_ref().map(|p| p.zone).unwrap_or_else(|| {
+            state
+                .config
+                .zone
+                .default
+                .parse()
+                .unwrap_or(Zone::Private)
+        }),
     };
 
     // CSP knob: explicit form field wins; on update we preserve the existing
@@ -160,11 +176,11 @@ pub async fn deploy(
             .unwrap_or(Csp::Strict),
     };
 
-    // For visibility=password the password is mandatory on create or when
-    // switching into password mode; if updating a page that is already
-    // password-protected and the caller didn't re-supply the password, keep
-    // the existing hash. For non-password visibilities the field is ignored.
-    let password_hash: Option<String> = if visibility == Visibility::Password {
+    // For access=password the password is mandatory on create or when switching
+    // into password mode; if updating a page that is already password-protected
+    // and the caller didn't re-supply the password, keep the existing hash. For
+    // access=noauth the field is ignored.
+    let password_hash: Option<String> = if access == Access::Password {
         match form.password.clone().filter(|s| !s.is_empty()) {
             Some(plaintext) => {
                 let h = tokio::task::spawn_blocking(move || hash_password(&plaintext))
@@ -179,7 +195,7 @@ pub async fn deploy(
                 .ok_or_else(|| {
                     ApiError::bad_request(
                         "missing_password",
-                        "password field is required when visibility=password",
+                        "password field is required when access=password",
                     )
                 })
                 .map(Some)?,
@@ -211,7 +227,8 @@ pub async fn deploy(
         let mut next = prev;
         next.name = form.name.clone().or(next.name);
         next.mode = mode;
-        next.visibility = visibility;
+        next.access = access;
+        next.zone = zone;
         next.password_hash = password_hash;
         next.size_bytes = size_bytes;
         next.file_count = file_count;
@@ -225,7 +242,8 @@ pub async fn deploy(
                 uuid: page_uuid.clone(),
                 name: form.name.clone(),
                 mode,
-                visibility,
+                access,
+                zone,
                 password_hash,
                 owner_kind: OWNER_KIND_LOCAL.into(),
                 owner_id: OWNER_ID_LOCAL.into(),
@@ -242,7 +260,8 @@ pub async fn deploy(
         "size_bytes": size_bytes,
         "file_count": file_count,
         "mode": mode.as_str(),
-        "visibility": visibility.as_str(),
+        "access": access.as_str(),
+        "zone": zone.as_str(),
         "csp": csp.as_str(),
     })
     .to_string();
@@ -264,11 +283,24 @@ pub async fn deploy(
         )
         .await;
 
-    let url = format!(
-        "{}/p/{}",
-        state.config.server.public_url.trim_end_matches('/'),
-        saved.uuid
-    );
+    // Build the page URL. For a private (LAN-only) page, prefer a concrete
+    // internal host from `[zone].internal_hosts` so the printed URL is one that
+    // actually resolves on the LAN; wildcard entries (`*.host`) can't be turned
+    // into a single URL, so we skip them. Otherwise fall back to `public_url`.
+    // TODO: once zones carry their own base URL in config, use that directly.
+    let base = if zone == Zone::Private {
+        state
+            .config
+            .zone
+            .internal_hosts
+            .iter()
+            .find(|h| !h.contains('*'))
+            .map(|h| format!("https://{}", h.trim_end_matches('/')))
+            .unwrap_or_else(|| state.config.server.public_url.trim_end_matches('/').to_string())
+    } else {
+        state.config.server.public_url.trim_end_matches('/').to_string()
+    };
+    let url = format!("{}/p/{}", base, saved.uuid);
 
     Ok(Json(DeployResponse {
         uuid: saved.uuid,
@@ -276,7 +308,8 @@ pub async fn deploy(
         size_bytes,
         file_count,
         mode: mode.as_str().into(),
-        visibility: visibility.as_str().into(),
+        access: access.as_str().into(),
+        zone: zone.as_str().into(),
         csp: csp.as_str().into(),
     }))
 }
@@ -317,7 +350,8 @@ async fn read_form(mut multipart: Multipart, max_archive: u64) -> Result<Form, A
             "uuid" => form.uuid = Some(text(field).await?),
             "mode" => form.mode = Some(text(field).await?),
             "name" => form.name = Some(text(field).await?),
-            "visibility" => form.visibility = Some(text(field).await?),
+            "access" => form.access = Some(text(field).await?),
+            "zone" => form.zone = Some(text(field).await?),
             "password" => form.password = Some(text(field).await?),
             "csp" => form.csp = Some(text(field).await?),
             _ => {

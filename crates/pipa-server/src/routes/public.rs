@@ -11,7 +11,7 @@ use axum::routing::{get, post};
 use axum_extra::extract::cookie::{Cookie, CookieJar, SameSite};
 use bytes::Bytes;
 use pipa_adapters::verify_password;
-use pipa_core::{Csp, Mode, NewHit, Page, Visibility};
+use pipa_core::{Access, Csp, Mode, NewHit, Page};
 use hmac::{Hmac, Mac};
 use serde::Deserialize;
 use sha2::Sha256;
@@ -20,7 +20,7 @@ use crate::auth::OwnerCookieOpt;
 use crate::auth::tokens::mint_access_token;
 use crate::error::ServerError;
 use crate::ip_hash::{hmac_ip, hmac_value};
-use crate::middleware::forwarded::RealIp;
+use crate::middleware::forwarded::{ProxyPeer, RealIp};
 use crate::state::AppState;
 
 type HmacSha256 = Hmac<Sha256>;
@@ -97,44 +97,51 @@ async fn serve_root(
     State(state): State<AppState>,
     Path(uuid): Path<String>,
     real_ip: RealIp,
+    proxy_peer: ProxyPeer,
     headers: HeaderMap,
     jar: CookieJar,
     owner: OwnerCookieOpt,
 ) -> Response {
-    serve(state, uuid, String::new(), real_ip, headers, jar, owner).await
+    serve(state, uuid, String::new(), real_ip, proxy_peer.0, headers, jar, owner).await
 }
 
 async fn serve_path(
     State(state): State<AppState>,
     Path((uuid, path)): Path<(String, String)>,
     real_ip: RealIp,
+    proxy_peer: ProxyPeer,
     headers: HeaderMap,
     jar: CookieJar,
     owner: OwnerCookieOpt,
 ) -> Response {
-    serve(state, uuid, path, real_ip, headers, jar, owner).await
+    serve(state, uuid, path, real_ip, proxy_peer.0, headers, jar, owner).await
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn serve(
     state: AppState,
     uuid: String,
     rel_path: String,
     real_ip: RealIp,
+    peer_ip: Option<String>,
     headers: HeaderMap,
     jar: CookieJar,
     owner: OwnerCookieOpt,
 ) -> Response {
-    match serve_inner(state, uuid, rel_path, real_ip, headers, jar, owner).await {
+    match serve_inner(state, uuid, rel_path, real_ip, peer_ip, headers, jar, owner).await {
         Ok(resp) => resp,
         Err(e) => e.into_response(),
     }
 }
 
+#[allow(clippy::too_many_arguments)]
+#[cfg_attr(not(feature = "zone"), allow(unused_variables))]
 async fn serve_inner(
     state: AppState,
     uuid: String,
     rel_path: String,
     real_ip: RealIp,
+    peer_ip: Option<String>,
     headers: HeaderMap,
     jar: CookieJar,
     owner: OwnerCookieOpt,
@@ -144,19 +151,28 @@ async fn serve_inner(
         None => return Ok(not_found_response()),
     };
 
-    // Archived pages are soft-unpublished — 404 regardless of visibility so
+    // Archived pages are soft-unpublished — 404 regardless of anything else so
     // the bundle stops being addressable but stays on disk for un-archive.
     if page.archived {
         return Ok(not_found_response());
     }
 
-    match page.visibility {
-        // TODO(phase-1-auth.md §sessions): once owner sessions are speced,
-        // allow the owner cookie to browse private pages here. For now we
-        // always 404 to avoid leaking existence.
-        Visibility::Private => return Ok(not_found_response()),
-        Visibility::Public => {}
-        Visibility::Password => {
+    // Zone enforcement (the "where" axis), an exact match: a page serves only on
+    // the single channel its zone maps to; a mismatch is a silent 404 so the
+    // page's existence never leaks across the boundary. Runs before the access
+    // gate. Compiled out (and never enforced) unless the `zone` feature is on.
+    #[cfg(feature = "zone")]
+    {
+        let req_zone = crate::middleware::zone::request_zone(&state, peer_ip.as_deref(), &headers);
+        if page.zone != req_zone {
+            return Ok(not_found_response());
+        }
+    }
+
+    // Access gate (the "who" axis).
+    match page.access {
+        Access::Noauth => {}
+        Access::Password => {
             if !cookie_valid(&state, &uuid, &jar) {
                 return Ok(render_gate(&uuid, &rel_path, false));
             }
@@ -325,7 +341,7 @@ async fn submit_gate_inner(
         Some(p) => p,
         None => return Ok(not_found_response()),
     };
-    if page.visibility != Visibility::Password {
+    if page.access != Access::Password {
         return Ok(not_found_response());
     }
     let Some(hash) = page.password_hash.as_deref() else {

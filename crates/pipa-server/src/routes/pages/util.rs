@@ -6,7 +6,7 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use pipa_core::device::AccessTokenClaims;
-use pipa_core::{Page, Visibility};
+use pipa_core::{Access, Page};
 use serde::Serialize;
 
 use crate::auth::check_scope;
@@ -24,7 +24,8 @@ pub struct PageView {
     pub uuid: String,
     pub name: Option<String>,
     pub mode: String,
-    pub visibility: String,
+    pub access: String,
+    pub zone: String,
     pub owner_kind: String,
     pub owner_id: String,
     pub size_bytes: u64,
@@ -43,7 +44,8 @@ impl From<&Page> for PageView {
             uuid: p.uuid.clone(),
             name: p.name.clone(),
             mode: p.mode.as_str().to_string(),
-            visibility: p.visibility.as_str().to_string(),
+            access: p.access.as_str().to_string(),
+            zone: p.zone.as_str().to_string(),
             owner_kind: p.owner_kind.clone(),
             owner_id: p.owner_id.clone(),
             size_bytes: p.size_bytes,
@@ -100,9 +102,9 @@ pub fn require_admin(claims: &AccessTokenClaims, uuid: &str) -> Result<(), ApiEr
     }
 }
 
-/// Visibility label preserving the wire spelling.
-pub fn vis_str(v: Visibility) -> &'static str {
-    v.as_str()
+/// Access label preserving the wire spelling.
+pub fn access_str(a: Access) -> &'static str {
+    a.as_str()
 }
 
 pub fn unix_now() -> i64 {

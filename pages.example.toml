@@ -92,3 +92,22 @@ default_require_approval = false
 # CORS-ish: either "same-origin" (default) or a comma-separated list of
 # origins permitted to embed the comments widget.
 allowed_origins = "same-origin"
+
+[zone]
+# Per-page network-reach gating. Only consumed when the server is built with
+# the `zone` Cargo feature (`cargo build --features zone`); without it these
+# keys are parsed but ignored and every page serves on whatever front-end
+# reaches it. With the feature on, a `zone = "private"` page 404s for any
+# request that didn't arrive over the internal channel.
+#
+# `default` is the zone new deploys land in when `--zone` is omitted:
+# "public" (internet) or "private" (LAN). Fallback "private" = secure default.
+default = "private"
+
+# A request counts as the internal (LAN / private) zone only when BOTH its
+# reverse-proxy peer IP is in `internal_proxy_ips` AND its Host matches
+# `internal_hosts` (a leading `*.` is a subdomain wildcard). Requiring both
+# means an internet visitor can't reach a private page by forging the Host —
+# the external tunnel's peer IP is never in the internal list.
+internal_proxy_ips = []   # e.g. ["10.0.0.224"]  — your internal reverse proxy
+internal_hosts = []       # e.g. ["pages.i.example.dev", "*.i.example.dev"]

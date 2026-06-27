@@ -10,7 +10,7 @@ use pipa_adapters::SqliteRepository;
 use pipa_core::audit::{AuditAction, AuditEvent};
 use pipa_core::comment::{CommentStatus, NewComment};
 use pipa_core::hit::NewHit;
-use pipa_core::page::{Csp, Mode, NewPage, Visibility};
+use pipa_core::page::{Access, Csp, Mode, NewPage, Zone};
 use pipa_core::ports::Repository;
 
 use crate::common::{FakeClock, FakeIdGen, setup_in_memory_db};
@@ -20,7 +20,8 @@ fn sample_new_page(uuid: &str, ts: i64) -> NewPage {
         uuid: uuid.to_string(),
         name: Some("hello".into()),
         mode: Mode::Spa,
-        visibility: Visibility::Public,
+        access: Access::Noauth,
+        zone: Zone::Public,
         password_hash: None,
         owner_kind: "local".into(),
         owner_id: "local".into(),
@@ -52,7 +53,8 @@ async fn page_crud_round_trip_and_cascade() {
         .await
         .expect("create_page");
     assert_eq!(created.uuid, "page-1");
-    assert_eq!(created.visibility, Visibility::Public);
+    assert_eq!(created.access, Access::Noauth);
+    assert_eq!(created.zone, Zone::Public);
     assert_eq!(created.mode, Mode::Spa);
 
     // find
@@ -68,14 +70,16 @@ async fn page_crud_round_trip_and_cascade() {
     assert_eq!(listed.len(), 1);
     assert_eq!(listed[0].uuid, "page-1");
 
-    // update visibility + size
+    // update access/zone + size
     let mut updated = found.clone();
-    updated.visibility = Visibility::Private;
+    updated.access = Access::Password;
+    updated.zone = Zone::Private;
     updated.size_bytes = 4096;
     updated.file_count = 12;
     updated.updated_at = 200;
     let saved = repo.update_page(updated).await.expect("update_page");
-    assert_eq!(saved.visibility, Visibility::Private);
+    assert_eq!(saved.access, Access::Password);
+    assert_eq!(saved.zone, Zone::Private);
     assert_eq!(saved.size_bytes, 4096);
     assert_eq!(saved.file_count, 12);
     assert_eq!(saved.updated_at, 200);

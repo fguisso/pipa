@@ -181,6 +181,75 @@ async fn archived_page_returns_404() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn gate_styles_are_served_locally_under_strict_csp() {
+    // The gate page must NOT inline its CSS: `render_gate` emits the strict
+    // `default-src 'self'` CSP, which would block an inline <style>. Instead it
+    // links a same-origin stylesheet that the same policy allows.
+    let server = spawn_test_server().await;
+    let uuid = "01HXYZTEST00000000PAGE000C";
+    seed_page_with_index(
+        &server,
+        uuid,
+        "<h1>members only</h1>",
+        Mode::Static,
+        Access::Password,
+        Some("hunter2"),
+    )
+    .await;
+
+    let client = reqwest::Client::builder()
+        .redirect(reqwest::redirect::Policy::none())
+        .build()
+        .expect("client");
+
+    // Gate page: strict CSP, links the local stylesheet, no inline <style>.
+    let resp = client
+        .get(format!("{}/p/{}/", server.base(), uuid))
+        .send()
+        .await
+        .expect("send");
+    assert_eq!(resp.status().as_u16(), 200);
+    let csp = resp
+        .headers()
+        .get("content-security-policy")
+        .expect("gate must carry CSP")
+        .to_str()
+        .expect("ascii csp")
+        .to_string();
+    assert!(
+        csp.contains("default-src 'self'"),
+        "gate CSP should stay strict: {csp}"
+    );
+    let body = resp.text().await.expect("text");
+    assert!(
+        body.contains(r#"<link rel="stylesheet" href="/__gate.css""#),
+        "gate must link the local stylesheet"
+    );
+    assert!(
+        !body.contains("<style"),
+        "gate must not inline CSS (blocked by strict CSP)"
+    );
+
+    // The stylesheet is served from our own origin as text/css → permitted by
+    // `default-src 'self'`.
+    let resp = client
+        .get(format!("{}/__gate.css", server.base()))
+        .send()
+        .await
+        .expect("send css");
+    assert_eq!(resp.status().as_u16(), 200);
+    assert_eq!(
+        resp.headers()
+            .get(reqwest::header::CONTENT_TYPE)
+            .and_then(|v| v.to_str().ok()),
+        Some("text/css; charset=utf-8"),
+        "stylesheet must be served as text/css (nosniff is set globally)"
+    );
+    let css = resp.text().await.expect("css body");
+    assert!(css.contains(".card"), "stylesheet should carry the gate styles");
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn password_page_gates_then_serves_with_cookie() {
     let server = spawn_test_server().await;
     let uuid = "01HXYZTEST00000000PAGE0005";

@@ -46,10 +46,25 @@ pub fn router(_state: AppState) -> Router<AppState> {
     // opt-out actually takes effect. `render_gate` always emits CSP — the
     // gate is our HTML, not the page owner's, so it stays locked down.
     Router::new()
+        .route("/__gate.css", get(gate_css))
         .route("/p/:uuid/__gate", post(submit_gate))
         .route("/p/:uuid", get(redirect_to_trailing_slash))
         .route("/p/:uuid/", get(serve_root))
         .route("/p/:uuid/*path", get(serve_path))
+}
+
+/// Stylesheet for the password gate, served from our own origin so the strict
+/// gate CSP (`default-src 'self'`) permits it. Inlining the CSS into the gate
+/// HTML would require `style-src 'unsafe-inline'` (or a nonce), which we don't
+/// want to weaken the policy for. Static and shared across all gated pages, so
+/// it gets a long-lived cache.
+async fn gate_css() -> Response {
+    Response::builder()
+        .status(StatusCode::OK)
+        .header(header::CONTENT_TYPE, "text/css; charset=utf-8")
+        .header(header::CACHE_CONTROL, "public, max-age=3600")
+        .body(Body::from(include_str!("../../templates/gate.css")))
+        .expect("static gate css response builds")
 }
 
 /// Bug A fix: relative URLs in `index.html` (e.g. `href="css/site.css"`) are

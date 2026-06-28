@@ -61,6 +61,16 @@ pipa deploy /tmp/site          # secure by default: password-gated, server's def
 
 Open it to anyone (`pipa share <uuid> --access noauth`) or expose it to the internet (`pipa share <uuid> --zone public`); each loosens security, so each needs a browser step-up. Run `pipa concepts` for the full model.
 
+## Use from an AI agent
+
+Install the agent skill (Claude Code / Codex / Hermes) with one command:
+
+```sh
+bunx github:fguisso/pipa          # or: npx -y github:fguisso/pipa
+```
+
+It drops the skill into your agent's skills dir (auto-detects `~/.claude/skills`; pass a dir to override) and points you at the CLI installer. Then ask your agent to "set up the pipa CLI and deploy ./site" — it handles install, the browser login handoff, and step-up confirmations. See [`skills/pipa/SKILL.md`](skills/pipa/SKILL.md).
+
 ## Documentation
 
 - [The CLI](docs/cli.md): every command, `--json`, scopes, and where refresh tokens land.

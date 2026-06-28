@@ -1,0 +1,18 @@
+{
+  "name": "pipa",
+  "version": "0.1.0",
+  "private": false,
+  "description": "Installer for the pipa agent skill (and, optionally, the pipa CLI).",
+  "bin": {
+    "pipa-skill": "bin/install.js"
+  },
+  "files": [
+    "bin",
+    "skills"
+  ],
+  "license": "AGPL-3.0-or-later",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/fguisso/pipa.git"
+  }
+}

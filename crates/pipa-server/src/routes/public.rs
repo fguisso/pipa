@@ -9,6 +9,7 @@ use axum::http::{StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum_extra::extract::cookie::{Cookie, CookieJar, SameSite};
+use base64::Engine as _;
 use bytes::Bytes;
 use pipa_adapters::verify_password;
 use pipa_core::{Access, Csp, Mode, NewHit, Page};
@@ -184,11 +185,16 @@ async fn serve_inner(
         }
     }
 
-    // Access gate (the "who" axis).
+    // Access gate (the "who" axis). The interactive path is the browser cookie
+    // set by the unlock form; the non-interactive path is HTTP Basic Auth
+    // carrying the same page password, so headless agents (curl, an LLM tool)
+    // can fetch a protected `.md`/`.html` with just "URL + password" — no cookie
+    // dance. Same secret, same strength, over HTTPS; the gate only re-renders
+    // when neither path checks out.
     match page.access {
         Access::Noauth => {}
         Access::Password => {
-            if !cookie_valid(&state, &uuid, &jar) {
+            if !cookie_valid(&state, &uuid, &jar) && !basic_auth_valid(&page, &headers).await {
                 return Ok(render_gate(&uuid, &rel_path, false));
             }
         }
@@ -279,7 +285,7 @@ async fn serve_file(
 
     let mut resp = Response::builder()
         .status(StatusCode::OK)
-        .header(header::CONTENT_TYPE, mime)
+        .header(header::CONTENT_TYPE, ensure_text_charset(mime))
         .body(Body::from(body_bytes))
         .map_err(|e| ServerError::Internal(anyhow::anyhow!("build response: {e}")))?;
     // CSP is set per-response, gated by the page's `csp` knob: `Strict` (the
@@ -462,6 +468,64 @@ fn cookie_valid(state: &AppState, uuid: &str, jar: &CookieJar) -> bool {
     mac.verify_slice(&sig_bytes).is_ok()
 }
 
+/// Non-interactive unlock: accept the page password via HTTP Basic Auth
+/// (`Authorization: Basic base64(<uuid>:<password>)`). pipa pages have no
+/// per-user accounts — only a shared page secret — so the username is the page
+/// UUID by convention (it's already public in the URL, so it adds no second
+/// secret, just self-describing scope). An empty username (`:<password>`) is
+/// also accepted; a non-empty username that names a different page is rejected.
+/// Verifying against the stored Argon2id hash is CPU-heavy, so we only reach for
+/// it when a Basic header is actually present (a cookie-bearing browser never
+/// gets here).
+async fn basic_auth_valid(page: &Page, headers: &HeaderMap) -> bool {
+    if page.access != Access::Password {
+        return false;
+    }
+    let Some(hash) = page.password_hash.as_deref() else {
+        return false;
+    };
+    let Some(raw) = headers
+        .get(header::AUTHORIZATION)
+        .and_then(|v| v.to_str().ok())
+    else {
+        return false;
+    };
+    // Case-insensitive "Basic " scheme prefix, then base64(user:pass).
+    let Some(encoded) = raw
+        .strip_prefix("Basic ")
+        .or_else(|| raw.strip_prefix("basic "))
+    else {
+        return false;
+    };
+    let Ok(decoded) = base64::engine::general_purpose::STANDARD.decode(encoded.trim()) else {
+        return false;
+    };
+    let Ok(creds) = String::from_utf8(decoded) else {
+        return false;
+    };
+    // Split on the first ':' — passwords may contain ':', usernames can't.
+    let Some((user, password)) = creds.split_once(':') else {
+        return false;
+    };
+    // The page UUID is the conventional username (it's already public in the
+    // URL, so it carries no secret — just self-describing scope). Reject a
+    // non-empty username that names a different page so a credential meant for
+    // page A can't be aimed at page B by mistake; the bare `:password` form
+    // (empty username) stays valid for clients that only carry the secret.
+    if !user.is_empty() && user != page.uuid {
+        return false;
+    }
+    if password.is_empty() {
+        return false;
+    }
+    let password = password.to_string();
+
+    let h = hash.to_string();
+    tokio::task::spawn_blocking(move || verify_password(&h, &password).unwrap_or(false))
+        .await
+        .unwrap_or(false)
+}
+
 fn make_cookie_value(state: &AppState, uuid: &str, expires: i64) -> String {
     let expires_str = expires.to_string();
     let mut mac = HmacSha256::new_from_slice(state.hmac_key.as_bytes())
@@ -493,6 +557,19 @@ fn unix_now() -> i64 {
 
 fn not_found_response() -> Response {
     (StatusCode::NOT_FOUND, "not found").into_response()
+}
+
+/// `mime_guess` returns base types like `text/markdown` or `text/plain` with no
+/// charset. Browsers then fall back to a locale default and mangle UTF-8 — an
+/// accented `.md` served as bare `text/markdown` shows up as mojibake. Append
+/// `; charset=utf-8` to every `text/*` type that doesn't already declare one.
+/// Binary types (images, octet-stream, …) pass through untouched.
+pub(crate) fn ensure_text_charset(mime: String) -> String {
+    if mime.starts_with("text/") && !mime.to_ascii_lowercase().contains("charset") {
+        format!("{mime}; charset=utf-8")
+    } else {
+        mime
+    }
 }
 
 fn is_html_mime(mime: &str) -> bool {

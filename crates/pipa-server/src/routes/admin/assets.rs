@@ -37,7 +37,10 @@ pub async fn serve_asset(Path(path): Path<String>) -> Response {
                 .to_string();
             return Response::builder()
                 .status(StatusCode::OK)
-                .header(header::CONTENT_TYPE, mime)
+                .header(
+                    header::CONTENT_TYPE,
+                    crate::routes::public::ensure_text_charset(mime),
+                )
                 .header(header::CACHE_CONTROL, "public, max-age=3600")
                 .body(Body::from(asset.data.into_owned()))
                 .unwrap_or_else(|_| StatusCode::INTERNAL_SERVER_ERROR.into_response());

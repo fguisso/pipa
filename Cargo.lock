@@ -1066,7 +1066,7 @@ dependencies = [
 
 [[package]]
 name = "pipa-adapters"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "argon2",
@@ -1091,7 +1091,7 @@ dependencies = [
 
 [[package]]
 name = "pipa-cli"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "clap",
@@ -1118,7 +1118,7 @@ dependencies = [
 
 [[package]]
 name = "pipa-core"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1131,7 +1131,7 @@ dependencies = [
 
 [[package]]
 name = "pipa-sdk"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "axum",
@@ -1146,7 +1146,7 @@ dependencies = [
 
 [[package]]
 name = "pipa-server"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "ammonia",
  "anyhow",
@@ -1155,6 +1155,7 @@ dependencies = [
  "async-trait",
  "axum",
  "axum-extra",
+ "base64",
  "bytes",
  "clap",
  "pipa-adapters",

@@ -25,13 +25,13 @@
         <tbody>
           {% for e in events %}
             <tr class="{% if !e.success %}gpa-row--err{% endif %}">
-              <td>{{ e.ts_human }}</td>
+              <td class="gpa-when">{{ e.ts_human }}</td>
               <td class="gpa-mono">{{ e.action }}</td>
               <td class="gpa-mono">{{ e.actor }}</td>
               <td class="gpa-mono">{% if let Some(t) = e.target %}{{ t }}{% else %}—{% endif %}</td>
               <td class="gpa-mono">{% if let Some(s) = e.scope %}{{ s }}{% else %}—{% endif %}</td>
-              <td>{% if e.success %}ok{% else %}fail{% endif %}</td>
-              <td class="gpa-cell-md gpa-mono">{% if let Some(d) = e.details %}{{ d }}{% else %}{% endif %}</td>
+              <td>{% if e.success %}<span class="gpa-pill gpa-pill--ok">ok</span>{% else %}<span class="gpa-pill gpa-pill--fail">fail</span>{% endif %}</td>
+              <td class="gpa-cell-details">{% if let Some(d) = e.details %}{{ d }}{% else %}{% endif %}</td>
             </tr>
           {% endfor %}
         </tbody>

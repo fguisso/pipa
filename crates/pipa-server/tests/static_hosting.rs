@@ -450,3 +450,118 @@ async fn csp_strict_still_emits_header() {
         "csp=strict must emit the locked-down policy",
     );
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn markdown_is_served_with_utf8_charset() {
+    // Regression: text/* assets were served with the bare mime from mime_guess
+    // (e.g. `text/markdown`), so browsers guessed the encoding and accented
+    // bytes turned to mojibake. Every text/* response must declare utf-8.
+    let server = spawn_test_server().await;
+    let uuid = "01HXYZTEST00000000PAGE0009";
+    seed_page_with_index(
+        &server,
+        uuid,
+        "<h1>index</h1>",
+        Mode::Static,
+        Access::Noauth,
+        None,
+    )
+    .await;
+
+    // Drop a markdown sibling with accented (non-ASCII) content.
+    let md_body = "# Relatório\n\nAção concluída — verificação OK.\n";
+    let pages_dir: PathBuf = server.data_root.path().join("pages");
+    fs::write(pages_dir.join(uuid).join("report.md"), md_body).expect("report.md");
+
+    let resp = reqwest::Client::new()
+        .get(format!("{}/p/{}/report.md", server.base(), uuid))
+        .send()
+        .await
+        .expect("send");
+    assert_eq!(resp.status().as_u16(), 200);
+    let ctype = resp
+        .headers()
+        .get(reqwest::header::CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("")
+        .to_string();
+    assert!(
+        ctype.starts_with("text/") && ctype.to_lowercase().contains("charset=utf-8"),
+        "markdown must be served as text/* with charset=utf-8, got {ctype:?}",
+    );
+    // Bytes round-trip as UTF-8 (no mojibake).
+    let body = resp.text().await.expect("text");
+    assert!(body.contains("Relatório") && body.contains("Ação"));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn password_page_unlocks_via_basic_auth() {
+    // Non-interactive path: a headless caller (agent/curl) presents the page
+    // password via HTTP Basic Auth and gets the content in one request — no
+    // unlock form, no cookie.
+    let server = spawn_test_server().await;
+    let uuid = "01HXYZTEST00000000PAGE0010";
+    seed_page_with_index(
+        &server,
+        uuid,
+        "<h1>members only</h1>",
+        Mode::Static,
+        Access::Password,
+        Some("hunter2"),
+    )
+    .await;
+
+    let client = reqwest::Client::new();
+
+    // Conventional form: username is the page uuid → 200 with the content.
+    let resp = client
+        .get(format!("{}/p/{}/", server.base(), uuid))
+        .basic_auth(uuid, Some("hunter2"))
+        .send()
+        .await
+        .expect("send");
+    assert_eq!(resp.status().as_u16(), 200);
+    let body = resp.text().await.expect("text");
+    assert!(
+        body.contains("members only"),
+        "uuid:password Basic Auth must unlock content"
+    );
+
+    // Bare form: empty username + right password is also accepted.
+    let resp = client
+        .get(format!("{}/p/{}/", server.base(), uuid))
+        .basic_auth("", Some("hunter2"))
+        .send()
+        .await
+        .expect("send");
+    assert_eq!(resp.status().as_u16(), 200);
+    assert!(resp.text().await.expect("text").contains("members only"));
+
+    // Right password but a username naming a *different* page → gate.
+    let resp = client
+        .get(format!("{}/p/{}/", server.base(), uuid))
+        .basic_auth("01HXYZTEST00000000PAGE9999", Some("hunter2"))
+        .send()
+        .await
+        .expect("send");
+    assert_eq!(resp.status().as_u16(), 200);
+    let body = resp.text().await.expect("text");
+    assert!(
+        !body.contains("members only") && body.to_lowercase().contains("password"),
+        "mismatched username must fall back to the gate"
+    );
+
+    // Wrong password → gate, never the secret.
+    let resp = client
+        .get(format!("{}/p/{}/", server.base(), uuid))
+        .basic_auth(uuid, Some("WRONG"))
+        .send()
+        .await
+        .expect("send");
+    assert_eq!(resp.status().as_u16(), 200);
+    let body = resp.text().await.expect("text");
+    assert!(
+        !body.contains("members only") && body.to_lowercase().contains("password"),
+        "wrong Basic Auth password must fall back to the gate"
+    );
+}

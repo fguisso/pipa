@@ -1,6 +1,6 @@
 [package]
 name = "pipa-server"
-version = "0.1.0"
+version = "0.1.1"
 edition.workspace = true
 rust-version.workspace = true
 authors.workspace = true
@@ -30,6 +30,7 @@ axum-extra.workspace = true
 bytes.workspace = true
 clap.workspace = true
 hex.workspace = true
+base64.workspace = true
 hmac.workspace = true
 mime_guess.workspace = true
 pulldown-cmark.workspace = true

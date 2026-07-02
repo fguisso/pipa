@@ -1,5 +1,8 @@
 # pipa
 
+> *Leve feito uma pipa: empine seus sites no ar de forma rápida e leve.*
+> *Light as a kite: launch your pages into the sky, fast and featherweight.*
+
 **Self-hosted static-site hosting that fits in your back pocket.** Push a folder of HTML from your laptop and get back a private URL. Add comments, see who visits, password-gate the link, or share it publicly, all from one binary running on a Raspberry Pi.
 
 ```

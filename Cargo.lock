@@ -1065,126 +1065,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "pipa-adapters"
-version = "0.1.1"
-dependencies = [
- "anyhow",
- "argon2",
- "async-trait",
- "bytes",
- "chacha20poly1305",
- "pipa-core",
- "hex",
- "rand 0.8.6",
- "serde",
- "sha2",
- "sqlx",
- "tempfile",
- "thiserror 1.0.69",
- "time",
- "tokio",
- "toml",
- "tracing",
- "ulid",
- "walkdir",
-]
-
-[[package]]
-name = "pipa-cli"
-version = "0.1.1"
-dependencies = [
- "anyhow",
- "clap",
- "dialoguer",
- "dirs",
- "pipa-sdk",
- "indicatif",
- "keyring",
- "nu-ansi-term",
- "qrcode",
- "reqwest",
- "serde",
- "serde_json",
- "tabled",
- "tokio",
- "toml",
- "tracing",
- "tracing-subscriber",
- "url",
- "walkdir",
- "which",
- "zip",
-]
-
-[[package]]
-name = "pipa-core"
-version = "0.1.1"
-dependencies = [
- "anyhow",
- "async-trait",
- "bytes",
- "serde",
- "thiserror 1.0.69",
- "time",
- "ulid",
-]
-
-[[package]]
-name = "pipa-sdk"
-version = "0.1.1"
-dependencies = [
- "anyhow",
- "axum",
- "bytes",
- "reqwest",
- "serde",
- "serde_json",
- "thiserror 1.0.69",
- "tokio",
- "url",
-]
-
-[[package]]
-name = "pipa-server"
-version = "0.1.1"
-dependencies = [
- "ammonia",
- "anyhow",
- "argon2",
- "askama",
- "async-trait",
- "axum",
- "axum-extra",
- "base64",
- "bytes",
- "clap",
- "pipa-adapters",
- "pipa-core",
- "hex",
- "hmac",
- "mime_guess",
- "pulldown-cmark",
- "qrcode",
- "reqwest",
- "rust-embed",
- "serde",
- "serde_json",
- "sha2",
- "sqlx",
- "tempfile",
- "thiserror 1.0.69",
- "time",
- "tokio",
- "toml",
- "tower",
- "tower-http",
- "tracing",
- "tracing-subscriber",
- "ulid",
- "zip",
-]
-
-[[package]]
 name = "generic-array"
 version = "0.14.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2142,6 +2022,126 @@ name = "pin-project-lite"
 version = "0.2.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a89322df9ebe1c1578d689c92318e070967d1042b512afbe49518723f4e6d5cd"
+
+[[package]]
+name = "pipa-adapters"
+version = "0.1.1"
+dependencies = [
+ "anyhow",
+ "argon2",
+ "async-trait",
+ "bytes",
+ "chacha20poly1305",
+ "hex",
+ "pipa-core",
+ "rand 0.8.6",
+ "serde",
+ "sha2",
+ "sqlx",
+ "tempfile",
+ "thiserror 1.0.69",
+ "time",
+ "tokio",
+ "toml",
+ "tracing",
+ "ulid",
+ "walkdir",
+]
+
+[[package]]
+name = "pipa-cli"
+version = "0.1.1"
+dependencies = [
+ "anyhow",
+ "clap",
+ "dialoguer",
+ "dirs",
+ "indicatif",
+ "keyring",
+ "nu-ansi-term",
+ "pipa-sdk",
+ "qrcode",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "tabled",
+ "tokio",
+ "toml",
+ "tracing",
+ "tracing-subscriber",
+ "url",
+ "walkdir",
+ "which",
+ "zip",
+]
+
+[[package]]
+name = "pipa-core"
+version = "0.1.1"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "bytes",
+ "serde",
+ "thiserror 1.0.69",
+ "time",
+ "ulid",
+]
+
+[[package]]
+name = "pipa-sdk"
+version = "0.1.1"
+dependencies = [
+ "anyhow",
+ "axum",
+ "bytes",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "thiserror 1.0.69",
+ "tokio",
+ "url",
+]
+
+[[package]]
+name = "pipa-server"
+version = "0.1.1"
+dependencies = [
+ "ammonia",
+ "anyhow",
+ "argon2",
+ "askama",
+ "async-trait",
+ "axum",
+ "axum-extra",
+ "base64",
+ "bytes",
+ "clap",
+ "hex",
+ "hmac",
+ "mime_guess",
+ "pipa-adapters",
+ "pipa-core",
+ "pulldown-cmark",
+ "qrcode",
+ "reqwest",
+ "rust-embed",
+ "serde",
+ "serde_json",
+ "sha2",
+ "sqlx",
+ "tempfile",
+ "thiserror 1.0.69",
+ "time",
+ "tokio",
+ "toml",
+ "tower",
+ "tower-http",
+ "tracing",
+ "tracing-subscriber",
+ "ulid",
+ "zip",
+]
 
 [[package]]
 name = "pkcs1"

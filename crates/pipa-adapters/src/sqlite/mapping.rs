@@ -7,6 +7,8 @@ use pipa_core::device::{
 };
 use pipa_core::error::{CoreError, Result};
 use pipa_core::page::{Access, Csp, Mode, Page, Zone};
+use pipa_core::user::{OAuthIdentity, OAuthProvider, User, UserSession};
+use pipa_core::workspace::{Workspace, WorkspaceKind, WorkspaceMemberView, WorkspaceRole};
 use sqlx::Row;
 use sqlx::sqlite::SqliteRow;
 
@@ -92,6 +94,71 @@ pub fn device_from_row(row: &SqliteRow) -> Result<Device> {
         created_at: get_i64(row, "created_at")?,
         last_seen_at: opt_i64(row, "last_seen_at")?,
         revoked_at: opt_i64(row, "revoked_at")?,
+        user_id: opt(row, "user_id")?,
+    })
+}
+
+pub fn user_from_row(row: &SqliteRow) -> Result<User> {
+    Ok(User {
+        id: get(row, "id")?,
+        username: get(row, "username")?,
+        email: opt(row, "email")?,
+        password_hash: get(row, "password_hash")?,
+        created_at: get_i64(row, "created_at")?,
+        disabled_at: opt_i64(row, "disabled_at")?,
+    })
+}
+
+pub fn user_session_from_row(row: &SqliteRow) -> Result<UserSession> {
+    Ok(UserSession {
+        id: get(row, "id")?,
+        user_id: get(row, "user_id")?,
+        created_at: get_i64(row, "created_at")?,
+        last_seen_at: opt_i64(row, "last_seen_at")?,
+        user_agent: opt(row, "user_agent")?,
+        ip: opt(row, "ip")?,
+        revoked_at: opt_i64(row, "revoked_at")?,
+    })
+}
+
+pub fn oauth_identity_from_row(row: &SqliteRow) -> Result<OAuthIdentity> {
+    let provider_s: String = row
+        .try_get("provider")
+        .map_err(|e| CoreError::RepositoryFailure(format!("oauth.provider: {e}")))?;
+    Ok(OAuthIdentity {
+        id: get(row, "id")?,
+        user_id: get(row, "user_id")?,
+        provider: OAuthProvider::from_str(&provider_s)?,
+        subject: get(row, "subject")?,
+        created_at: get_i64(row, "created_at")?,
+    })
+}
+
+pub fn workspace_from_row(row: &SqliteRow) -> Result<Workspace> {
+    let kind_s: String = row
+        .try_get("kind")
+        .map_err(|e| CoreError::RepositoryFailure(format!("workspace.kind: {e}")))?;
+    Ok(Workspace {
+        id: get(row, "id")?,
+        name: get(row, "name")?,
+        kind: WorkspaceKind::from_str(&kind_s)?,
+        max_pages: opt_i64(row, "max_pages")?,
+        max_bytes: opt_i64(row, "max_bytes")?,
+        created_at: get_i64(row, "created_at")?,
+    })
+}
+
+/// A `workspace_members` row joined to `users.username` (column alias
+/// `username`).
+pub fn workspace_member_view_from_row(row: &SqliteRow) -> Result<WorkspaceMemberView> {
+    let role_s: String = row
+        .try_get("role")
+        .map_err(|e| CoreError::RepositoryFailure(format!("workspace_member.role: {e}")))?;
+    Ok(WorkspaceMemberView {
+        user_id: get(row, "user_id")?,
+        username: get(row, "username")?,
+        role: WorkspaceRole::from_str(&role_s)?,
+        created_at: get_i64(row, "created_at")?,
     })
 }
 

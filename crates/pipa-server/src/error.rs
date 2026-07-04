@@ -66,6 +66,10 @@ impl ApiError {
     pub fn gone(code: &'static str, msg: impl Into<String>) -> Self {
         Self::new(StatusCode::GONE, code, msg)
     }
+
+    pub fn internal(msg: impl Into<String>) -> Self {
+        Self::new(StatusCode::INTERNAL_SERVER_ERROR, "internal_error", msg)
+    }
 }
 
 #[derive(Serialize)]

@@ -12,7 +12,7 @@ use crate::auth::{AuthClaims, verify_step_up};
 use crate::error::{ApiError, ServerError};
 use crate::state::AppState;
 
-use super::util::{require_destroy, unix_now};
+use super::util::{caller_identity, require_destroy, require_page_access, unix_now};
 
 const STEP_UP_HEADER: &str = "x-stepup-code";
 const DELETE_OPERATION: &str = "page.delete";
@@ -25,9 +25,13 @@ pub async fn delete_page(
 ) -> Result<Response, ServerError> {
     require_destroy(&claims, &uuid)?;
 
-    if state.repo.find_page(&uuid).await?.is_none() {
-        return Err(ApiError::not_found("page_not_found", "no page with that uuid").into());
-    }
+    let page = state
+        .repo
+        .find_page(&uuid)
+        .await?
+        .ok_or_else(|| ApiError::not_found("page_not_found", "no page with that uuid"))?;
+    let caller = caller_identity(&state, &claims).await;
+    require_page_access(&state, &caller, &page, true).await?;
 
     let code = headers
         .get(STEP_UP_HEADER)

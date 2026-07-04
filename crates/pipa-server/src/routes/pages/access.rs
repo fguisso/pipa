@@ -23,7 +23,10 @@ use crate::auth::{AuthClaims, verify_step_up};
 use crate::error::{ApiError, ServerError};
 use crate::state::AppState;
 
-use super::util::{PageView, access_str, require_admin, require_destroy, unix_now};
+use super::util::{
+    PageView, access_str, caller_identity, require_admin, require_destroy, require_page_access,
+    unix_now,
+};
 
 const STEP_UP_HEADER: &str = "x-stepup-code";
 /// Step-up operation string gating a security loosening (access->noauth or
@@ -95,6 +98,11 @@ pub async fn change_access(
         .find_page(&uuid)
         .await?
         .ok_or_else(|| ApiError::not_found("page_not_found", "no page with that uuid"))?;
+    // Ownership gate (Phase 3): a user may only reconfigure its own pages; the
+    // single-owner "local" identity may touch any page.
+    let caller = caller_identity(&state, &claims).await;
+    require_page_access(&state, &caller, &page, true).await?;
+
     let old_access = page.access;
     let old_zone = page.zone;
     let old_csp = page.csp;

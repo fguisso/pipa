@@ -30,13 +30,15 @@ pub async fn run() -> Result<()> {
         }
     };
 
-    let store = credstore::pick_best();
-    let _ = store.delete(&server);
+    if let Ok(store) = credstore::pick_best() {
+        let _ = store.delete(&server);
+    }
 
     // Forget the server too so the next `whoami` doesn't pretend we're logged in.
     let mut cfg = cfg;
     cfg.server = None;
     cfg.device_id = None;
+    cfg.active_workspace = None;
     let _ = config::save(&cfg);
 
     if server_remote_ok {

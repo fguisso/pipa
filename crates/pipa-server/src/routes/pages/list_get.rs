@@ -13,7 +13,7 @@ use crate::auth::{AuthClaims, check_scope};
 use crate::error::{ApiError, ServerError};
 use crate::state::AppState;
 
-use super::util::{OWNER_ID_LOCAL, OWNER_KIND_LOCAL, PageView, require_read};
+use super::util::{CallerIdentity, PageView, caller_identity, require_page_access, require_read};
 
 #[derive(Debug, Serialize)]
 pub struct ListResponse {
@@ -25,10 +25,22 @@ pub async fn list_pages(
     AuthClaims(claims): AuthClaims,
 ) -> Result<Json<ListResponse>, ServerError> {
     require_read_wildcard(&claims)?;
-    let rows = state
-        .repo
-        .list_pages(OWNER_KIND_LOCAL, OWNER_ID_LOCAL)
-        .await?;
+    // `local` (the operator superuser) lists every page; a user lists pages
+    // across all workspaces they belong to, newest first.
+    let caller = caller_identity(&state, &claims).await;
+    let rows = match caller {
+        CallerIdentity::Local => state.repo.list_all_pages().await?,
+        CallerIdentity::User(uid) => {
+            let memberships = state.auth.list_workspaces_for_user(&uid).await?;
+            let mut pages = Vec::new();
+            for m in memberships {
+                let mut p = state.repo.list_pages("workspace", &m.workspace.id).await?;
+                pages.append(&mut p);
+            }
+            pages.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+            pages
+        }
+    };
     Ok(Json(ListResponse {
         pages: rows.iter().map(PageView::from).collect(),
     }))
@@ -45,6 +57,8 @@ pub async fn get_page(
         .find_page(&uuid)
         .await?
         .ok_or_else(|| ApiError::not_found("page_not_found", "no page with that uuid"))?;
+    let caller = caller_identity(&state, &claims).await;
+    require_page_access(&state, &caller, &page, false).await?;
     Ok(Json(PageView::from(&page)))
 }
 

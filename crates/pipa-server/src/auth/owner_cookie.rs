@@ -31,26 +31,51 @@ const COOKIE_DOMAIN: &[u8] = b"owner-session/v1/";
 /// otherwise expire soon, deferred for now).
 const COOKIE_MAX_AGE_SECONDS: i64 = 60 * 60 * 24 * 365;
 
-/// Sign a session id into the cookie value `id.sig`.
-pub fn sign_cookie(key: &HmacKey, session_id: &str) -> String {
+/// Sign a session id into `id.sig`, domain-separated by `domain`. Shared by the
+/// owner and (Phase 3) user cookies so they can never be swapped for each other.
+pub(crate) fn sign_with_domain(key: &HmacKey, domain: &[u8], session_id: &str) -> String {
     let mut mac = HmacSha256::new_from_slice(key.as_bytes()).expect("any-length HMAC key");
-    mac.update(COOKIE_DOMAIN);
+    mac.update(domain);
     mac.update(session_id.as_bytes());
     let sig = mac.finalize().into_bytes();
     format!("{session_id}.{}", base64url(&sig))
+}
+
+/// Verify a domain-separated cookie value and return the session id on match.
+pub(crate) fn verify_with_domain(key: &HmacKey, domain: &[u8], value: &str) -> Option<String> {
+    let (id, sig_b64) = value.split_once('.')?;
+    let provided_sig = base64url_decode(sig_b64)?;
+    let mut mac = HmacSha256::new_from_slice(key.as_bytes()).expect("any-length HMAC key");
+    mac.update(domain);
+    mac.update(id.as_bytes());
+    mac.verify_slice(&provided_sig).ok()?;
+    Some(id.to_string())
+}
+
+/// Sign a session id into the cookie value `id.sig`.
+pub fn sign_cookie(key: &HmacKey, session_id: &str) -> String {
+    sign_with_domain(key, COOKIE_DOMAIN, session_id)
 }
 
 /// Verify a cookie value `id.sig` and return the session id when the signature
 /// matches. Returns `None` for any malformed input — callers should treat
 /// "no cookie" and "bad cookie" the same way.
 pub fn verify_cookie(key: &HmacKey, value: &str) -> Option<String> {
-    let (id, sig_b64) = value.split_once('.')?;
-    let provided_sig = base64url_decode(sig_b64)?;
-    let mut mac = HmacSha256::new_from_slice(key.as_bytes()).expect("any-length HMAC key");
-    mac.update(COOKIE_DOMAIN);
-    mac.update(id.as_bytes());
-    mac.verify_slice(&provided_sig).ok()?;
-    Some(id.to_string())
+    verify_with_domain(key, COOKIE_DOMAIN, value)
+}
+
+/// Read a named cookie's value from the request headers.
+pub(crate) fn read_cookie(parts: &Parts, name: &str) -> Option<String> {
+    for h in parts.headers.get_all(header::COOKIE).iter() {
+        let s = h.to_str().ok()?;
+        for piece in s.split(';') {
+            let piece = piece.trim();
+            if let Some(rest) = piece.strip_prefix(&format!("{name}=")) {
+                return Some(rest.to_string());
+            }
+        }
+    }
+    None
 }
 
 /// Build a `Set-Cookie` header value for the owner cookie. Marks `Secure` only

@@ -14,6 +14,7 @@ mod deploy;
 mod delete;
 mod list_get;
 mod stats;
+mod transfer;
 
 pub(crate) mod util;
 
@@ -36,4 +37,5 @@ pub fn router(state: &AppState) -> Router<AppState> {
         .route("/api/pages/:uuid", delete_route(delete::delete_page))
         .route("/api/pages/:uuid/access", post(access::change_access))
         .route("/api/pages/:uuid/stats", get(stats::stats))
+        .route("/api/pages/:uuid/transfer", post(transfer::transfer_page))
 }

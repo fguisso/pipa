@@ -25,7 +25,7 @@ async fn automation_refresh_cannot_mint_destroy_but_can_deploy() {
     let device = server
         .state
         .auth
-        .create_device("ci-runner", Scope::Automation)
+        .create_device("ci-runner", Scope::Automation, None)
         .await
         .expect("create device");
     let (_t, refresh) = server
@@ -110,7 +110,7 @@ async fn automation_bearer_cannot_stepup_init() {
     let device = server
         .state
         .auth
-        .create_device("ci-runner", Scope::Automation)
+        .create_device("ci-runner", Scope::Automation, None)
         .await
         .expect("create device");
 

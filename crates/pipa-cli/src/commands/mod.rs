@@ -13,7 +13,9 @@ pub mod rm;
 pub mod server;
 pub mod share;
 pub mod stats;
+pub mod transfer;
 pub mod whoami;
+pub mod workspace;
 
 use anyhow::{Context, Result};
 use pipa_sdk::Client;
@@ -29,7 +31,7 @@ pub fn client_from_credstore() -> Result<(Client, String)> {
         .server
         .clone()
         .context("not logged in — run `pipa login --server <url>`")?;
-    let store = credstore::pick_best();
+    let store = credstore::pick_best()?;
     let refresh = store
         .load(&server)?
         .context("not logged in — run `pipa login`")?;
@@ -50,14 +52,20 @@ pub async fn client_with_access(scope: &str) -> Result<(Client, String, String)>
         .mint_access(scope, 300)
         .await
         .context("minting access token")?;
-    let store = credstore::pick_best();
-    if store.tier_name() != "env" {
+    let store = credstore::pick_best()?;
+    // Read-only tiers can't persist the rotated refresh: `env`
+    // (`PIPA_REFRESH_TOKEN`) never, and `cmd` only when no SET command is
+    // configured. For those we surface the rotated token instead of aborting.
+    let read_only = store.tier_name() == "env"
+        || (store.tier_name() == "cmd" && !credstore::cmd::CmdStore::is_writable());
+    if !read_only {
         store
             .store(&server, &mint.refresh)
             .context("persisting rotated refresh")?;
     } else {
         eprintln!(
-            "warning: PIPA_REFRESH_TOKEN is read-only; rotated refresh = {}",
+            "warning: credential tier `{}` is read-only; rotated refresh = {}",
+            store.tier_name(),
             mint.refresh
         );
     }

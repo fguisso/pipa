@@ -65,6 +65,9 @@ impl Client {
         if let Some(v) = params.csp {
             form = form.text("csp", v);
         }
+        if let Some(v) = params.workspace {
+            form = form.text("workspace", v);
+        }
 
         let resp = self
             .req(Method::POST, "/api/pages")?

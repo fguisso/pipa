@@ -9,10 +9,15 @@ use crate::output::{bar, rule, rule_titled};
 
 const WIDTH: usize = 58;
 
-pub async fn run(args: StatsArgs) -> Result<()> {
+pub async fn run(args: StatsArgs, json: bool) -> Result<()> {
     let scope = format!("read:{}", args.uuid);
     let (client, _server, access) = client_with_access(&scope).await?;
     let resp = client.stats(&access, &args.uuid, &args.range).await?;
+
+    if json {
+        println!("{}", serde_json::to_string_pretty(&resp)?);
+        return Ok(());
+    }
 
     let label = pretty_range(&resp.range);
     println!("{}", rule_titled(&format!("last {label}"), WIDTH));

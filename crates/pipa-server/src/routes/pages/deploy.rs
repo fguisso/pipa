@@ -34,7 +34,9 @@ use crate::auth::{AuthClaims, check_scope};
 use crate::error::{ApiError, ServerError};
 use crate::state::AppState;
 
-use super::util::{OWNER_ID_LOCAL, OWNER_KIND_LOCAL, unix_now};
+use super::util::{
+    caller_identity, enforce_quota, require_page_access, resolve_create_owner, unix_now,
+};
 
 /// Decompressed bytes are allowed to exceed compressed by 2x — generous
 /// enough for legitimate HTML/JS bundles, tight enough to stop trivial bombs.
@@ -53,6 +55,9 @@ struct Form {
     zone: Option<String>,
     password: Option<String>,
     csp: Option<String>,
+    /// Phase 4: which workspace a NEW page belongs to. Ignored on update (the
+    /// page keeps its owner). Empty/absent → the caller's personal workspace.
+    workspace: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -106,6 +111,11 @@ pub async fn deploy(
         UlidGen.new_ulid().to_string()
     };
 
+    // Resolve the caller (Phase 4). An update must target a page the caller can
+    // write; a create resolves the owning workspace up front (authz before we
+    // extract anything), quota is checked after we know the size.
+    let caller = caller_identity(&state, &claims).await;
+
     // If updating, the row must already exist so we don't silently materialize
     // pages the caller didn't actually create.
     let existing: Option<Page> = if updating {
@@ -114,9 +124,17 @@ pub async fn deploy(
             .find_page(&page_uuid)
             .await?
             .ok_or_else(|| ApiError::not_found("page_not_found", "no page with that uuid"))?;
+        require_page_access(&state, &caller, &p, true).await?;
         Some(p)
     } else {
         None
+    };
+
+    // For a new page, resolve which workspace owns it (fails fast on authz).
+    let create_owner: Option<(String, String)> = if updating {
+        None
+    } else {
+        Some(resolve_create_owner(&state, &caller, form.workspace.as_deref()).await?)
     };
 
     // Mode / access / zone resolution: explicit form field wins; otherwise keep
@@ -230,6 +248,12 @@ pub async fn deploy(
         file_count,
     } = state.storage.promote(handle, &page_uuid).await?;
 
+    // Enforce the workspace quota now that the deploy size is known (create
+    // only; updates replace bytes in place).
+    if let Some((owner_kind, owner_id)) = create_owner.as_ref() {
+        enforce_quota(&state, owner_kind, owner_id, size_bytes).await?;
+    }
+
     let now = unix_now();
     let saved = if let Some(prev) = existing {
         let mut next = prev;
@@ -244,6 +268,8 @@ pub async fn deploy(
         next.updated_at = now;
         state.repo.update_page(next).await?
     } else {
+        let (owner_kind, owner_id) =
+            create_owner.expect("create path always resolves an owner");
         state
             .repo
             .create_page(NewPage {
@@ -253,8 +279,8 @@ pub async fn deploy(
                 access,
                 zone,
                 password_hash,
-                owner_kind: OWNER_KIND_LOCAL.into(),
-                owner_id: OWNER_ID_LOCAL.into(),
+                owner_kind,
+                owner_id,
                 size_bytes,
                 file_count,
                 csp,
@@ -362,6 +388,7 @@ async fn read_form(mut multipart: Multipart, max_archive: u64) -> Result<Form, A
             "zone" => form.zone = Some(text(field).await?),
             "password" => form.password = Some(text(field).await?),
             "csp" => form.csp = Some(text(field).await?),
+            "workspace" => form.workspace = Some(text(field).await?),
             _ => {
                 // Drain unknown fields so the underlying stream is consumed.
                 let _ = field.bytes().await;

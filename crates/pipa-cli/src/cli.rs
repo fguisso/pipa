@@ -11,6 +11,14 @@ pub struct Cli {
     #[arg(long, global = true)]
     pub json: bool,
 
+    /// Non-interactive mode for CI, agents and containers. Never touches the OS
+    /// keychain and never falls back to an on-disk credential file — credentials
+    /// must come from `PIPA_SECRET_GET_CMD`/`_SET_CMD` (1Password/Bitwarden) or
+    /// `PIPA_REFRESH_TOKEN`. Also suppresses browser-open and interactive
+    /// prompts (so a blocked keyring or a missing TTY can never hang the CLI).
+    #[arg(long, global = true)]
+    pub headless: bool,
+
     #[command(subcommand)]
     pub command: Command,
 }
@@ -49,6 +57,63 @@ pub enum Command {
     Activity(ActivityArgs),
     /// Manage comments per page.
     Comments(CommentsArgs),
+    /// Manage workspaces and membership (Phase 4).
+    Workspace(WorkspaceArgs),
+    /// Move a page to another workspace.
+    Transfer(TransferArgs),
+}
+
+#[derive(Debug, Args)]
+pub struct WorkspaceArgs {
+    #[command(subcommand)]
+    pub action: WorkspaceAction,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum WorkspaceAction {
+    /// List the workspaces you belong to and your role in each.
+    Ls,
+    /// Set the active workspace for `deploy` (persisted in config).
+    Use { id: String },
+    /// Clear the active workspace (deploys go to your personal workspace).
+    Unset,
+    /// Create a new team workspace (you become its owner).
+    Create { name: String },
+    /// Show a workspace's members and quota (defaults to the active one).
+    Show { id: Option<String> },
+    /// Add a member by username.
+    MemberAdd {
+        ws: String,
+        username: String,
+        #[arg(long, default_value = "viewer", value_parser = ["owner", "admin", "editor", "viewer"])]
+        role: String,
+    },
+    /// Change a member's role.
+    MemberRole {
+        ws: String,
+        user_id: String,
+        #[arg(value_parser = ["owner", "admin", "editor", "viewer"])]
+        role: String,
+    },
+    /// Remove a member.
+    MemberRm { ws: String, user_id: String },
+    /// Set (or clear) a workspace's page/byte quota. Omit a flag to leave it.
+    Quota {
+        ws: String,
+        /// Max pages (`0` to forbid, omit to leave unchanged).
+        #[arg(long)]
+        max_pages: Option<i64>,
+        /// Max total bytes.
+        #[arg(long)]
+        max_bytes: Option<i64>,
+    },
+}
+
+#[derive(Debug, Args)]
+pub struct TransferArgs {
+    pub uuid: String,
+    /// Destination workspace id.
+    pub workspace: String,
 }
 
 #[derive(Debug, Args)]
@@ -62,15 +127,35 @@ pub struct LoginArgs {
     /// Human-readable label to apply to the device.
     #[arg(long)]
     pub label: Option<String>,
+    /// Start the flow, print the approval URL, and exit WITHOUT waiting.
+    /// Pair with `pipa login --resume` to block until approval. Lets an agent
+    /// show the URL to a human and then wait — no background shell needed.
+    #[arg(long, conflicts_with = "resume")]
+    pub no_wait: bool,
+    /// Resume a `--no-wait` login: block polling until the pending approval
+    /// completes, then store the credential. Ignores the connection flags
+    /// (server/scope come from the pending session).
+    #[arg(long)]
+    pub resume: bool,
 }
 
 #[derive(Debug, Args)]
 pub struct DeployArgs {
     /// Directory to upload.
     pub dir: PathBuf,
-    /// Existing page UUID to update. Omit to create a new page.
+    /// Existing page UUID to update. Omit to reuse the page remembered for this
+    /// directory (see the deploy manifest), or to create a new one if none.
     #[arg(long)]
     pub uuid: Option<String>,
+    /// Force-create a fresh page, ignoring any page remembered for this
+    /// directory. Mutually exclusive with `--uuid`.
+    #[arg(long, conflicts_with = "uuid")]
+    pub new: bool,
+    /// Workspace to create the page in (Phase 4). Overrides the active
+    /// workspace set via `pipa workspace use`. Ignored when updating an
+    /// existing page. Defaults to your personal workspace.
+    #[arg(long)]
+    pub workspace: Option<String>,
     /// Optional human label for the page.
     #[arg(long)]
     pub name: Option<String>,
@@ -141,11 +226,29 @@ pub struct ShareArgs {
     /// (stored but NOT enforced).
     #[arg(long)]
     pub force: bool,
+    /// For a loosening change (needs step-up): start the confirmation, print the
+    /// URL, and exit without waiting. Re-run the SAME command with `--resume` to
+    /// finish. No effect on non-loosening edits.
+    #[arg(long, conflicts_with = "resume")]
+    pub no_wait: bool,
+    /// Resume a `--no-wait` loosening: wait for the human's confirmation, then
+    /// apply the change. Re-run with the same loosening flags.
+    #[arg(long)]
+    pub resume: bool,
 }
 
 #[derive(Debug, Args)]
 pub struct RmArgs {
     pub uuid: String,
+    /// Start the step-up confirmation, print the URL, and exit without waiting.
+    /// Re-run with `--resume` to finish. Lets an agent hand the URL to a human
+    /// with no background shell.
+    #[arg(long, conflicts_with = "resume")]
+    pub no_wait: bool,
+    /// Resume a `--no-wait` deletion: wait for the human's confirmation, then
+    /// delete.
+    #[arg(long)]
+    pub resume: bool,
 }
 
 #[derive(Debug, Args)]
@@ -159,7 +262,16 @@ pub enum DevicesAction {
     /// List devices (default).
     Ls,
     /// Revoke a device by id.
-    Revoke { id: String },
+    Revoke {
+        id: String,
+        /// Revoking another device needs step-up: start the confirmation, print
+        /// the URL, and exit without waiting. Re-run with `--resume` to finish.
+        #[arg(long, conflicts_with = "resume")]
+        no_wait: bool,
+        /// Resume a `--no-wait` revoke: wait for confirmation, then revoke.
+        #[arg(long)]
+        resume: bool,
+    },
 }
 
 #[derive(Debug, Args)]

@@ -39,6 +39,9 @@ pub struct Device {
     pub created_at: i64,
     pub last_seen_at: Option<i64>,
     pub revoked_at: Option<i64>,
+    /// Owning user (Phase 3). `None` for the Phase-1 single-owner ("local")
+    /// admin device and any device paired before multi-user existed.
+    pub user_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

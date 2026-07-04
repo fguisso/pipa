@@ -1,3 +1,4 @@
+use std::str::FromStr;
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -10,6 +11,10 @@ use pipa_core::error::{CoreError, Result};
 use pipa_core::ids::IdGen;
 use pipa_core::ports::{AuthStore, PollResult, RefreshTokenIssued};
 use pipa_core::time::Clock;
+use pipa_core::user::{NewOAuthIdentity, NewUser, OAuthProvider, User, UserSession};
+use pipa_core::workspace::{
+    NewWorkspace, Workspace, WorkspaceMemberView, WorkspaceMembership, WorkspaceRole,
+};
 use rand::RngCore;
 use rand::rngs::OsRng;
 use sha2::{Digest, Sha256};
@@ -17,7 +22,8 @@ use sqlx::{Row, SqlitePool};
 
 use super::mapping::{
     admin_from_row, device_from_row, owner_session_from_row, pairing_from_row, refresh_from_row,
-    setup_from_row,
+    setup_from_row, user_from_row, user_session_from_row, workspace_from_row,
+    workspace_member_view_from_row,
 };
 
 /// 90 days in seconds; pairings issue tokens with this TTL by default.
@@ -178,16 +184,22 @@ impl AuthStore for SqliteAuthStore {
         Ok(n as u64)
     }
 
-    async fn create_device(&self, label: &str, scope: Scope) -> Result<Device> {
+    async fn create_device(
+        &self,
+        label: &str,
+        scope: Scope,
+        user_id: Option<&str>,
+    ) -> Result<Device> {
         let id = self.new_id();
         let now = self.clock.now();
         sqlx::query(
-            "INSERT INTO devices (id, label, scope, created_at) VALUES (?, ?, ?, ?)",
+            "INSERT INTO devices (id, label, scope, created_at, user_id) VALUES (?, ?, ?, ?, ?)",
         )
         .bind(&id)
         .bind(label)
         .bind(scope.as_str())
         .bind(now)
+        .bind(user_id)
         .execute(&self.pool)
         .await
         .map_err(db)?;
@@ -198,6 +210,7 @@ impl AuthStore for SqliteAuthStore {
             created_at: now,
             last_seen_at: None,
             revoked_at: None,
+            user_id: user_id.map(|s| s.to_string()),
         })
     }
 
@@ -207,6 +220,29 @@ impl AuthStore for SqliteAuthStore {
             .await
             .map_err(db)?;
         rows.iter().map(device_from_row).collect()
+    }
+
+    async fn list_devices_for_user(&self, user_id: &str) -> Result<Vec<Device>> {
+        let rows =
+            sqlx::query("SELECT * FROM devices WHERE user_id = ? ORDER BY created_at DESC")
+                .bind(user_id)
+                .fetch_all(&self.pool)
+                .await
+                .map_err(db)?;
+        rows.iter().map(device_from_row).collect()
+    }
+
+    async fn set_device_user(&self, device_id: &str, user_id: &str) -> Result<()> {
+        let res = sqlx::query("UPDATE devices SET user_id = ? WHERE id = ?")
+            .bind(user_id)
+            .bind(device_id)
+            .execute(&self.pool)
+            .await
+            .map_err(db)?;
+        if res.rows_affected() == 0 {
+            return Err(CoreError::NotFound);
+        }
+        Ok(())
     }
 
     async fn revoke_device(&self, id: &str) -> Result<()> {
@@ -431,6 +467,7 @@ impl AuthStore for SqliteAuthStore {
         code: &str,
         label: &str,
         scope: Scope,
+        user_id: Option<&str>,
     ) -> Result<RefreshTokenIssued> {
         let now = self.clock.now();
 
@@ -454,7 +491,7 @@ impl AuthStore for SqliteAuthStore {
             return Err(CoreError::AlreadyExists);
         }
 
-        let device = self.create_device(label, scope).await?;
+        let device = self.create_device(label, scope, user_id).await?;
         let (refresh, plaintext) = self
             .issue_refresh(&device.id, scope, PAIRING_REFRESH_TTL)
             .await?;
@@ -945,6 +982,445 @@ impl AuthStore for SqliteAuthStore {
 
         tx.commit().await.map_err(db)?;
         Ok(())
+    }
+
+    // users (Phase 3 multi-user)
+
+    async fn create_user(&self, u: NewUser) -> Result<User> {
+        let id = self.new_id();
+        let now = self.clock.now();
+        // The personal workspace uses the deterministic `ws-<userid>` scheme so
+        // it matches the SQL data-migration in 0011 for pre-existing users.
+        let ws_id = format!("ws-{id}");
+        let ws_name = format!("{}'s workspace", u.username);
+
+        let mut tx = self.pool.begin().await.map_err(db)?;
+
+        sqlx::query(
+            r#"
+            INSERT INTO users (id, username, email, password_hash, created_at)
+            VALUES (?, ?, ?, ?, ?)
+            "#,
+        )
+        .bind(&id)
+        .bind(&u.username)
+        .bind(&u.email)
+        .bind(&u.password_hash)
+        .bind(now)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| {
+            let msg = e.to_string();
+            if msg.contains("UNIQUE") && msg.contains("users.username") {
+                CoreError::AlreadyExists
+            } else {
+                db(e)
+            }
+        })?;
+
+        sqlx::query(
+            "INSERT INTO workspaces (id, name, kind, created_at) VALUES (?, ?, 'personal', ?)",
+        )
+        .bind(&ws_id)
+        .bind(&ws_name)
+        .bind(now)
+        .execute(&mut *tx)
+        .await
+        .map_err(db)?;
+
+        sqlx::query(
+            "INSERT INTO workspace_members (workspace_id, user_id, role, created_at) \
+             VALUES (?, ?, 'owner', ?)",
+        )
+        .bind(&ws_id)
+        .bind(&id)
+        .bind(now)
+        .execute(&mut *tx)
+        .await
+        .map_err(db)?;
+
+        tx.commit().await.map_err(db)?;
+
+        Ok(User {
+            id,
+            username: u.username,
+            email: u.email,
+            password_hash: u.password_hash,
+            created_at: now,
+            disabled_at: None,
+        })
+    }
+
+    async fn find_user_by_username(&self, username: &str) -> Result<Option<User>> {
+        let row = sqlx::query("SELECT * FROM users WHERE username = ?")
+            .bind(username)
+            .fetch_optional(&self.pool)
+            .await
+            .map_err(db)?;
+        let Some(row) = row else { return Ok(None) };
+        Ok(Some(user_from_row(&row)?))
+    }
+
+    async fn find_user_by_id(&self, id: &str) -> Result<Option<User>> {
+        let row = sqlx::query("SELECT * FROM users WHERE id = ?")
+            .bind(id)
+            .fetch_optional(&self.pool)
+            .await
+            .map_err(db)?;
+        let Some(row) = row else { return Ok(None) };
+        Ok(Some(user_from_row(&row)?))
+    }
+
+    async fn list_users(&self) -> Result<Vec<User>> {
+        let rows = sqlx::query("SELECT * FROM users ORDER BY created_at DESC")
+            .fetch_all(&self.pool)
+            .await
+            .map_err(db)?;
+        rows.iter().map(user_from_row).collect()
+    }
+
+    async fn set_user_disabled(&self, id: &str, disabled: bool) -> Result<()> {
+        let val = if disabled { Some(self.clock.now()) } else { None };
+        let res = sqlx::query("UPDATE users SET disabled_at = ? WHERE id = ?")
+            .bind(val)
+            .bind(id)
+            .execute(&self.pool)
+            .await
+            .map_err(db)?;
+        if res.rows_affected() == 0 {
+            return Err(CoreError::NotFound);
+        }
+        Ok(())
+    }
+
+    // user sessions
+
+    async fn create_user_session(
+        &self,
+        user_id: &str,
+        user_agent: Option<&str>,
+        ip: Option<&str>,
+    ) -> Result<UserSession> {
+        let id = self.new_id();
+        let now = self.clock.now();
+        sqlx::query(
+            r#"
+            INSERT INTO user_sessions (id, user_id, created_at, last_seen_at, user_agent, ip)
+            VALUES (?, ?, ?, ?, ?, ?)
+            "#,
+        )
+        .bind(&id)
+        .bind(user_id)
+        .bind(now)
+        .bind(now)
+        .bind(user_agent)
+        .bind(ip)
+        .execute(&self.pool)
+        .await
+        .map_err(db)?;
+        Ok(UserSession {
+            id,
+            user_id: user_id.to_string(),
+            created_at: now,
+            last_seen_at: Some(now),
+            user_agent: user_agent.map(|s| s.to_string()),
+            ip: ip.map(|s| s.to_string()),
+            revoked_at: None,
+        })
+    }
+
+    async fn find_user_session(&self, id: &str) -> Result<Option<UserSession>> {
+        let row = sqlx::query("SELECT * FROM user_sessions WHERE id = ? AND revoked_at IS NULL")
+            .bind(id)
+            .fetch_optional(&self.pool)
+            .await
+            .map_err(db)?;
+        let Some(row) = row else { return Ok(None) };
+        Ok(Some(user_session_from_row(&row)?))
+    }
+
+    async fn touch_user_session(&self, id: &str) -> Result<()> {
+        let now = self.clock.now();
+        sqlx::query("UPDATE user_sessions SET last_seen_at = ? WHERE id = ?")
+            .bind(now)
+            .bind(id)
+            .execute(&self.pool)
+            .await
+            .map_err(db)?;
+        Ok(())
+    }
+
+    async fn list_user_sessions(&self, user_id: &str) -> Result<Vec<UserSession>> {
+        let rows = sqlx::query(
+            "SELECT * FROM user_sessions WHERE user_id = ? ORDER BY created_at DESC",
+        )
+        .bind(user_id)
+        .fetch_all(&self.pool)
+        .await
+        .map_err(db)?;
+        rows.iter().map(user_session_from_row).collect()
+    }
+
+    async fn revoke_user_session(&self, id: &str) -> Result<()> {
+        let now = self.clock.now();
+        let res = sqlx::query(
+            "UPDATE user_sessions SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL",
+        )
+        .bind(now)
+        .bind(id)
+        .execute(&self.pool)
+        .await
+        .map_err(db)?;
+        if res.rows_affected() == 0 {
+            return Err(CoreError::NotFound);
+        }
+        Ok(())
+    }
+
+    // oauth (scaffold — no live provider flow yet)
+
+    async fn link_oauth(&self, ident: NewOAuthIdentity) -> Result<()> {
+        let id = self.new_id();
+        let now = self.clock.now();
+        sqlx::query(
+            r#"
+            INSERT INTO oauth_identities (id, user_id, provider, subject, created_at)
+            VALUES (?, ?, ?, ?, ?)
+            "#,
+        )
+        .bind(&id)
+        .bind(&ident.user_id)
+        .bind(ident.provider.as_str())
+        .bind(&ident.subject)
+        .bind(now)
+        .execute(&self.pool)
+        .await
+        .map_err(|e| {
+            let msg = e.to_string();
+            if msg.contains("UNIQUE") {
+                CoreError::AlreadyExists
+            } else {
+                db(e)
+            }
+        })?;
+        Ok(())
+    }
+
+    async fn find_user_by_oauth(
+        &self,
+        provider: OAuthProvider,
+        subject: &str,
+    ) -> Result<Option<User>> {
+        let row = sqlx::query(
+            r#"
+            SELECT u.* FROM users u
+            JOIN oauth_identities o ON o.user_id = u.id
+            WHERE o.provider = ? AND o.subject = ?
+            "#,
+        )
+        .bind(provider.as_str())
+        .bind(subject)
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(db)?;
+        let Some(row) = row else { return Ok(None) };
+        Ok(Some(user_from_row(&row)?))
+    }
+
+    // workspaces (Phase 4)
+
+    async fn create_workspace(&self, ws: NewWorkspace, owner_user_id: &str) -> Result<Workspace> {
+        let id = self.new_id();
+        let now = self.clock.now();
+        let mut tx = self.pool.begin().await.map_err(db)?;
+
+        sqlx::query(
+            "INSERT INTO workspaces (id, name, kind, max_pages, max_bytes, created_at) \
+             VALUES (?, ?, ?, ?, ?, ?)",
+        )
+        .bind(&id)
+        .bind(&ws.name)
+        .bind(ws.kind.as_str())
+        .bind(ws.max_pages)
+        .bind(ws.max_bytes)
+        .bind(now)
+        .execute(&mut *tx)
+        .await
+        .map_err(db)?;
+
+        sqlx::query(
+            "INSERT INTO workspace_members (workspace_id, user_id, role, created_at) \
+             VALUES (?, ?, 'owner', ?)",
+        )
+        .bind(&id)
+        .bind(owner_user_id)
+        .bind(now)
+        .execute(&mut *tx)
+        .await
+        .map_err(db)?;
+
+        tx.commit().await.map_err(db)?;
+
+        Ok(Workspace {
+            id,
+            name: ws.name,
+            kind: ws.kind,
+            max_pages: ws.max_pages,
+            max_bytes: ws.max_bytes,
+            created_at: now,
+        })
+    }
+
+    async fn get_workspace(&self, id: &str) -> Result<Option<Workspace>> {
+        let row = sqlx::query("SELECT * FROM workspaces WHERE id = ?")
+            .bind(id)
+            .fetch_optional(&self.pool)
+            .await
+            .map_err(db)?;
+        let Some(row) = row else { return Ok(None) };
+        Ok(Some(workspace_from_row(&row)?))
+    }
+
+    async fn list_workspaces_for_user(&self, user_id: &str) -> Result<Vec<WorkspaceMembership>> {
+        let rows = sqlx::query(
+            "SELECT w.*, m.role AS role FROM workspaces w \
+             JOIN workspace_members m ON m.workspace_id = w.id \
+             WHERE m.user_id = ? ORDER BY w.created_at ASC",
+        )
+        .bind(user_id)
+        .fetch_all(&self.pool)
+        .await
+        .map_err(db)?;
+        rows.iter()
+            .map(|r| {
+                let role_s: String = r.try_get("role").map_err(db)?;
+                Ok(WorkspaceMembership {
+                    workspace: workspace_from_row(r)?,
+                    role: WorkspaceRole::from_str(&role_s)?,
+                })
+            })
+            .collect()
+    }
+
+    async fn set_workspace_quota(
+        &self,
+        workspace_id: &str,
+        max_pages: Option<i64>,
+        max_bytes: Option<i64>,
+    ) -> Result<()> {
+        let res =
+            sqlx::query("UPDATE workspaces SET max_pages = ?, max_bytes = ? WHERE id = ?")
+                .bind(max_pages)
+                .bind(max_bytes)
+                .bind(workspace_id)
+                .execute(&self.pool)
+                .await
+                .map_err(db)?;
+        if res.rows_affected() == 0 {
+            return Err(CoreError::NotFound);
+        }
+        Ok(())
+    }
+
+    async fn add_member(
+        &self,
+        workspace_id: &str,
+        user_id: &str,
+        role: WorkspaceRole,
+    ) -> Result<()> {
+        // Verify the user exists up front so a bad username is a clean NotFound
+        // rather than an opaque FK failure.
+        let exists: i64 = sqlx::query("SELECT COUNT(*) AS c FROM users WHERE id = ?")
+            .bind(user_id)
+            .fetch_one(&self.pool)
+            .await
+            .map_err(db)?
+            .try_get("c")
+            .map_err(db)?;
+        if exists == 0 {
+            return Err(CoreError::NotFound);
+        }
+        sqlx::query(
+            "INSERT INTO workspace_members (workspace_id, user_id, role, created_at) \
+             VALUES (?, ?, ?, ?) \
+             ON CONFLICT(workspace_id, user_id) DO UPDATE SET role = excluded.role",
+        )
+        .bind(workspace_id)
+        .bind(user_id)
+        .bind(role.as_str())
+        .bind(self.clock.now())
+        .execute(&self.pool)
+        .await
+        .map_err(db)?;
+        Ok(())
+    }
+
+    async fn update_member_role(
+        &self,
+        workspace_id: &str,
+        user_id: &str,
+        role: WorkspaceRole,
+    ) -> Result<()> {
+        let res = sqlx::query(
+            "UPDATE workspace_members SET role = ? WHERE workspace_id = ? AND user_id = ?",
+        )
+        .bind(role.as_str())
+        .bind(workspace_id)
+        .bind(user_id)
+        .execute(&self.pool)
+        .await
+        .map_err(db)?;
+        if res.rows_affected() == 0 {
+            return Err(CoreError::NotFound);
+        }
+        Ok(())
+    }
+
+    async fn remove_member(&self, workspace_id: &str, user_id: &str) -> Result<()> {
+        let res = sqlx::query(
+            "DELETE FROM workspace_members WHERE workspace_id = ? AND user_id = ?",
+        )
+        .bind(workspace_id)
+        .bind(user_id)
+        .execute(&self.pool)
+        .await
+        .map_err(db)?;
+        if res.rows_affected() == 0 {
+            return Err(CoreError::NotFound);
+        }
+        Ok(())
+    }
+
+    async fn get_member_role(
+        &self,
+        workspace_id: &str,
+        user_id: &str,
+    ) -> Result<Option<WorkspaceRole>> {
+        let row = sqlx::query(
+            "SELECT role FROM workspace_members WHERE workspace_id = ? AND user_id = ?",
+        )
+        .bind(workspace_id)
+        .bind(user_id)
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(db)?;
+        let Some(row) = row else { return Ok(None) };
+        let role_s: String = row.try_get("role").map_err(db)?;
+        Ok(Some(WorkspaceRole::from_str(&role_s)?))
+    }
+
+    async fn list_members(&self, workspace_id: &str) -> Result<Vec<WorkspaceMemberView>> {
+        let rows = sqlx::query(
+            "SELECT m.user_id AS user_id, u.username AS username, m.role AS role, \
+                    m.created_at AS created_at \
+             FROM workspace_members m JOIN users u ON u.id = m.user_id \
+             WHERE m.workspace_id = ? ORDER BY m.created_at ASC",
+        )
+        .bind(workspace_id)
+        .fetch_all(&self.pool)
+        .await
+        .map_err(db)?;
+        rows.iter().map(workspace_member_view_from_row).collect()
     }
 }
 

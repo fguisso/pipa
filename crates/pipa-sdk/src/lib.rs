@@ -18,7 +18,9 @@ pub mod error;
 pub mod models;
 pub mod meta;
 pub mod pages;
+pub mod workspaces;
 
 pub use client::Client;
 pub use error::{ErrorBody, SdkError};
 pub use models::*;
+pub use workspaces::{Membership, MemberInfo, WorkspaceDetail, WorkspaceInfo};

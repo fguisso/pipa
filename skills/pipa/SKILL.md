@@ -45,17 +45,19 @@ anything else. Determine it like this:
    - `{"logged_in":false}` → not logged in.
 2. If there's no server to reuse, **ASK the human: "What is the upstream pipa
    server URL?"** Use their exact answer as `<server-url>`.
-3. Start the login and hand the URL to the human:
+3. Start the login **without waiting** and hand the URL to the human:
    ```sh
-   ./scripts/agent-login.sh <server-url> "<device-label>"
+   pipa login --no-wait --json --server <server-url> --label "<device-label>"
    ```
-   This prints exactly one line: the **verify URL**. Give that URL to the human
-   and ask them to open it in a browser and approve (they must already be signed
-   in as the pipa admin/owner).
-4. Wait for them, then confirm:
+   This prints one JSON object with a `verify_url` and exits immediately. Give
+   that URL to the human and ask them to open it in a browser and approve (they
+   must already be signed in as the pipa admin/owner).
+4. Then **resume** — this blocks until they approve, then stores the token:
    ```sh
-   pipa whoami --json    # expect "logged_in":true
+   pipa login --resume --json    # returns {"status":"approved",…} on success
    ```
+   No background shell, no output scraping: the CLI owns the wait. Re-run
+   `--resume` if it ever times out (10 min). Verify with `pipa whoami --json`.
 
 Credentials are stored locally (best tier available, falling back to
 `~/.config/pipa/auth.toml`, chmod 600). The chosen server is remembered, so
@@ -104,14 +106,15 @@ pipa share <uuid> --zone private --json
 ```
 
 **Loosening** (`--access noauth` or `--zone public`) is destructive → step-up.
-Use the helper so you can hand the URL to the human:
+Use the same `--no-wait` / `--resume` split as login:
 
 ```sh
-./scripts/agent-stepup.sh share <uuid> --zone public
+pipa share <uuid> --zone public --no-wait --json   # prints step_up.verify_url, exits
+# → hand verify_url to the human to approve in a browser, then:
+pipa share <uuid> --zone public --resume --json    # blocks until confirmed, then applies
 ```
 
-It prints the **confirmation URL** — give it to the human to approve in the
-browser. The command finishes on its own once approved; verify with
+Re-run `--resume` with the **same** loosening flags. Verify with
 `pipa get <uuid> --json`.
 
 ## 6. Inspect
@@ -124,8 +127,16 @@ pipa get <uuid> --json
 ## Gotchas (you won't find these in --help alone)
 
 - Login/step-up approval is **always** a human-in-browser step. Don't loop
-  trying to self-approve.
+  trying to self-approve. The `--no-wait` → `--resume` split is how you hand the
+  URL over and then wait — no background shell, no scraping.
 - `pipa activity` does not yet have a CLI read endpoint on older servers; the
   audit log lives server-side.
-- Deleting (`pipa rm <uuid>`) also needs step-up → use `agent-stepup.sh rm <uuid>`.
+- Deleting (`pipa rm <uuid>`) also needs step-up → same split:
+  `pipa rm <uuid> --no-wait --json` then `pipa rm <uuid> --resume --json`.
+- Revoking **another** device needs step-up too:
+  `pipa devices revoke <id> --no-wait --json` then `… --resume --json`.
+- For CI / non-interactive agents, add `--headless`: it never touches the OS
+  keychain and never falls back to a file — credentials must come from
+  `PIPA_SECRET_GET_CMD`/`PIPA_SECRET_SET_CMD` (an `op`/`bw` command) or
+  `PIPA_REFRESH_TOKEN`.
 - To install the server itself (not just the client), see `server.md`.

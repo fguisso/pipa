@@ -149,6 +149,59 @@ impl Repository for SqliteRepository {
         rows.iter().map(page_from_row).collect()
     }
 
+    async fn list_all_pages(&self) -> Result<Vec<Page>> {
+        let rows = sqlx::query("SELECT * FROM pages ORDER BY created_at DESC")
+            .fetch_all(&self.pool)
+            .await
+            .map_err(db)?;
+        rows.iter().map(page_from_row).collect()
+    }
+
+    async fn count_pages_for_owner(&self, owner_kind: &str, owner_id: &str) -> Result<u64> {
+        let c: i64 =
+            sqlx::query("SELECT COUNT(*) AS c FROM pages WHERE owner_kind = ? AND owner_id = ?")
+                .bind(owner_kind)
+                .bind(owner_id)
+                .fetch_one(&self.pool)
+                .await
+                .map_err(db)?
+                .try_get("c")
+                .map_err(db)?;
+        Ok(c as u64)
+    }
+
+    async fn sum_bytes_for_owner(&self, owner_kind: &str, owner_id: &str) -> Result<u64> {
+        let s: i64 = sqlx::query(
+            "SELECT COALESCE(SUM(size_bytes), 0) AS s FROM pages \
+             WHERE owner_kind = ? AND owner_id = ?",
+        )
+        .bind(owner_kind)
+        .bind(owner_id)
+        .fetch_one(&self.pool)
+        .await
+        .map_err(db)?
+        .try_get("s")
+        .map_err(db)?;
+        Ok(s as u64)
+    }
+
+    async fn transfer_page(&self, uuid: &str, owner_kind: &str, owner_id: &str) -> Result<()> {
+        let res = sqlx::query(
+            "UPDATE pages SET owner_kind = ?, owner_id = ?, updated_at = ? WHERE uuid = ?",
+        )
+        .bind(owner_kind)
+        .bind(owner_id)
+        .bind(self.clock.now())
+        .bind(uuid)
+        .execute(&self.pool)
+        .await
+        .map_err(db)?;
+        if res.rows_affected() == 0 {
+            return Err(CoreError::NotFound);
+        }
+        Ok(())
+    }
+
     async fn delete_page(&self, uuid: &str) -> Result<()> {
         let res = sqlx::query("DELETE FROM pages WHERE uuid = ?")
             .bind(uuid)
@@ -164,8 +217,8 @@ impl Repository for SqliteRepository {
     async fn record_hit(&self, h: NewHit) -> Result<()> {
         sqlx::query(
             r#"
-            INSERT INTO hits (page_uuid, ts, ip_hash, ua_hash, path, referrer, status)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO hits (page_uuid, ts, ip_hash, ua_hash, path, referrer, status, kind)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             "#,
         )
         .bind(&h.page_uuid)
@@ -175,6 +228,7 @@ impl Repository for SqliteRepository {
         .bind(&h.path)
         .bind(&h.referrer)
         .bind(h.status as i64)
+        .bind(h.kind.as_str())
         .execute(&self.pool)
         .await
         .map_err(db)?;
@@ -182,18 +236,29 @@ impl Repository for SqliteRepository {
     }
 
     async fn stats(&self, page_uuid: &str, since_ts: i64) -> Result<PageStats> {
-        let views: i64 =
-            sqlx::query("SELECT COUNT(*) AS c FROM hits WHERE page_uuid = ? AND ts >= ?")
-                .bind(page_uuid)
-                .bind(since_ts)
-                .fetch_one(&self.pool)
-                .await
-                .map_err(db)?
-                .try_get("c")
-                .map_err(db)?;
+        // Headline metrics count page views only — `kind = 'page'` excludes the
+        // CSS/JS/font/image sub-resource fetches that a single navigation drags
+        // in, and `status < 400` excludes recorded 404 misses. Without this a
+        // single browser open reads as dozens of "views". Self-referrers (a
+        // page's own assets carrying it as `Referer`) are scrubbed from the
+        // referrer breakdown.
+        let self_ref = format!("%/p/{page_uuid}/%");
+
+        let views: i64 = sqlx::query(
+            "SELECT COUNT(*) AS c FROM hits \
+             WHERE page_uuid = ? AND ts >= ? AND kind = 'page' AND status < 400",
+        )
+        .bind(page_uuid)
+        .bind(since_ts)
+        .fetch_one(&self.pool)
+        .await
+        .map_err(db)?
+        .try_get("c")
+        .map_err(db)?;
 
         let uniques: i64 = sqlx::query(
-            "SELECT COUNT(DISTINCT ip_hash) AS c FROM hits WHERE page_uuid = ? AND ts >= ?",
+            "SELECT COUNT(DISTINCT ip_hash) AS c FROM hits \
+             WHERE page_uuid = ? AND ts >= ? AND kind = 'page' AND status < 400",
         )
         .bind(page_uuid)
         .bind(since_ts)
@@ -207,7 +272,7 @@ impl Repository for SqliteRepository {
             r#"
             SELECT path AS p, COUNT(*) AS c
             FROM hits
-            WHERE page_uuid = ? AND ts >= ?
+            WHERE page_uuid = ? AND ts >= ? AND kind = 'page' AND status < 400
             GROUP BY path
             ORDER BY c DESC, p ASC
             LIMIT 10
@@ -230,7 +295,8 @@ impl Repository for SqliteRepository {
             r#"
             SELECT COALESCE(referrer, '(direct)') AS r, COUNT(*) AS c
             FROM hits
-            WHERE page_uuid = ? AND ts >= ?
+            WHERE page_uuid = ? AND ts >= ? AND kind = 'page' AND status < 400
+              AND (referrer IS NULL OR referrer NOT LIKE ?)
             GROUP BY COALESCE(referrer, '(direct)')
             ORDER BY c DESC, r ASC
             LIMIT 10
@@ -238,6 +304,7 @@ impl Repository for SqliteRepository {
         )
         .bind(page_uuid)
         .bind(since_ts)
+        .bind(&self_ref)
         .fetch_all(&self.pool)
         .await
         .map_err(db)?;

@@ -3,6 +3,7 @@ use axum::Router;
 use crate::middleware::headers::SecurityHeadersLayer;
 use crate::state::AppState;
 
+pub mod account;
 pub mod admin;
 pub mod auth;
 pub mod comments;
@@ -13,6 +14,8 @@ pub mod pages;
 pub mod public;
 pub mod root;
 pub mod stubs;
+pub mod workspaces;
+pub mod workspaces_ui;
 
 /// Top-level router. Composes:
 ///   - public file serving at `/p/<uuid>/*`
@@ -31,8 +34,11 @@ pub fn router(state: AppState) -> Router {
         .merge(health::router())
         .merge(meta::router())
         .merge(auth::router())
+        .merge(account::router())
         .merge(devices::router())
         .merge(pages::router(&state))
+        .merge(workspaces::router())
+        .merge(workspaces_ui::router())
         .merge(comments::router())
         .merge(admin::router(&state))
         .merge(stubs::router())

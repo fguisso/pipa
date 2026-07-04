@@ -14,9 +14,11 @@ use pipa_core::audit::{AuditAction, AuditEvent};
 use pipa_core::device::Scope;
 use serde::Deserialize;
 
-use crate::auth::owner_cookie::OwnerCookie;
+use crate::auth::owner_cookie::OwnerCookieOpt;
+use crate::auth::user_cookie::CurrentUserOpt;
 use crate::error::ServerError;
 use crate::state::AppState;
+use axum::response::Redirect;
 
 #[derive(Template)]
 #[template(path = "cli.html")]
@@ -50,9 +52,19 @@ pub struct CliQuery {
 }
 
 pub async fn cli_get(
-    _: OwnerCookie,
+    owner: OwnerCookieOpt,
+    user: CurrentUserOpt,
     Query(q): Query<CliQuery>,
 ) -> Response {
+    // Either the server owner OR a signed-in user may approve a CLI device.
+    // Unauthenticated visitors are sent to sign in first, preserving the code.
+    if owner.0.is_none() && user.0.is_none() {
+        let next = match q.code.as_deref() {
+            Some(c) if !c.is_empty() => format!("/cli?code={c}"),
+            _ => "/cli".to_string(),
+        };
+        return Redirect::to(&format!("/login?next={next}")).into_response();
+    }
     let scope = q.scope.as_deref().unwrap_or("interactive");
     let device_code = q.code.as_deref().unwrap_or("");
     if device_code.is_empty() {
@@ -78,17 +90,28 @@ pub struct CliForm {
 }
 
 pub async fn cli_post(
-    _: OwnerCookie,
+    owner: OwnerCookieOpt,
+    user: CurrentUserOpt,
     State(state): State<AppState>,
     Form(form): Form<CliForm>,
 ) -> Response {
-    match cli_post_inner(state, form).await {
+    if owner.0.is_none() && user.0.is_none() {
+        return Redirect::to("/login").into_response();
+    }
+    // Bind the new device to the approving user; the owner/admin approves as
+    // the single-owner ("local") identity → no user_id.
+    let approver_user_id = user.0.map(|(_, u)| u.id);
+    match cli_post_inner(state, form, approver_user_id).await {
         Ok(resp) => resp,
         Err(e) => e.into_response(),
     }
 }
 
-async fn cli_post_inner(state: AppState, form: CliForm) -> Result<Response, ServerError> {
+async fn cli_post_inner(
+    state: AppState,
+    form: CliForm,
+    approver_user_id: Option<String>,
+) -> Result<Response, ServerError> {
     let scope: Scope = form
         .scope
         .as_deref()
@@ -108,7 +131,7 @@ async fn cli_post_inner(state: AppState, form: CliForm) -> Result<Response, Serv
     let label = form.label.trim().to_string();
     match state
         .auth
-        .approve_pairing(&form.device_code, &label, scope)
+        .approve_pairing(&form.device_code, &label, scope, approver_user_id.as_deref())
         .await
     {
         Ok(issued) => {

@@ -18,6 +18,7 @@ use zip::write::SimpleFileOptions;
 
 use crate::cli::DeployArgs;
 use crate::commands::{client_with_access, ensure_feature};
+use crate::manifest;
 use crate::output::{check, human_bytes, kv};
 
 const PROGRESS_THRESHOLD_FILES: usize = 100;
@@ -35,10 +36,30 @@ pub async fn run(args: DeployArgs, json: bool) -> Result<()> {
         bail!("`{}` contains no files to deploy", dir.display());
     }
 
-    let scope = if let Some(u) = args.uuid.as_deref() {
-        format!("deploy:{u}")
+    // Resolve which page this deploy targets. Precedence: explicit --uuid, then
+    // the page remembered for this directory (unless --new forces fresh), else
+    // a brand-new page.
+    let mut manifest = manifest::load();
+    let (target_uuid, from_manifest) = if let Some(u) = args.uuid.clone() {
+        (Some(u), false)
+    } else if args.new {
+        (None, false)
+    } else if let Some(entry) = manifest.get(&dir) {
+        (Some(entry.uuid.clone()), true)
     } else {
-        "deploy:new".into()
+        (None, false)
+    };
+
+    if from_manifest && !json {
+        // `from_manifest` implies a resolved uuid; `unwrap_or_default` is just
+        // belt-and-suspenders.
+        let u = target_uuid.as_deref().unwrap_or_default();
+        println!("  updating remembered page {u} (pass --new to create a fresh page)");
+    }
+
+    let scope = match target_uuid.as_deref() {
+        Some(u) => format!("deploy:{u}"),
+        None => "deploy:new".into(),
     };
     let (client, _server, access) = client_with_access(&scope).await?;
 
@@ -91,14 +112,22 @@ pub async fn run(args: DeployArgs, json: bool) -> Result<()> {
         );
     }
 
+    // Active workspace for new pages: explicit --workspace wins, else the one
+    // set via `pipa workspace use`. Ignored server-side when updating.
+    let workspace = args
+        .workspace
+        .clone()
+        .or_else(|| crate::config::load().active_workspace);
+
     let params = DeployParams {
-        uuid: args.uuid.clone(),
+        uuid: target_uuid.clone(),
         mode: args.mode.clone(),
         name: args.name.clone(),
         access: args.access.clone(),
         zone: args.zone.clone(),
         password: args.password.clone(),
         csp: args.csp.clone(),
+        workspace,
     };
 
     let upload_pb = if json {
@@ -115,13 +144,64 @@ pub async fn run(args: DeployArgs, json: bool) -> Result<()> {
         Some(pb)
     };
 
-    let resp = client
-        .deploy_archive(&access, archive, params)
-        .await
-        .context("deploy POST")?;
+    // Keep a copy for the auto-retry path only when the target came from the
+    // manifest — the remembered page may have been deleted server-side since.
+    // Explicit --uuid / --new deploys don't pay this clone.
+    let archive_backup = if from_manifest {
+        Some(archive.clone())
+    } else {
+        None
+    };
+
+    let resp = match client.deploy_archive(&access, archive, params.clone()).await {
+        Ok(r) => r,
+        Err(e) if e.is_code("page_not_found") => {
+            match (archive_backup, target_uuid.as_deref()) {
+                (Some(backup), Some(stale)) => {
+                    // Stale manifest entry: the remembered page is gone. Forget
+                    // it and transparently deploy a fresh page instead of
+                    // dumping an error the user has to decode.
+                    manifest.forget(&dir);
+                    let _ = manifest.save();
+                    if !json {
+                        println!(
+                            "  remembered page {stale} no longer exists on the server — creating a new page"
+                        );
+                    }
+                    let (client2, _s2, access2) = client_with_access("deploy:new").await?;
+                    let mut fresh = params.clone();
+                    fresh.uuid = None;
+                    client2
+                        .deploy_archive(&access2, backup, fresh)
+                        .await
+                        .context("deploy (new page after stale manifest)")?
+                }
+                _ => {
+                    if let Some(pb) = upload_pb {
+                        pb.finish_and_clear();
+                    }
+                    bail!(
+                        "no page `{}` on the server.\n  \
+                         → run `pipa deploy {}` (without --uuid) to create a new page\n  \
+                         → run `pipa ls` to see the pages that exist",
+                        target_uuid.as_deref().unwrap_or(""),
+                        dir.display()
+                    );
+                }
+            }
+        }
+        Err(e) => return Err(anyhow::Error::new(e).context("deploy failed")),
+    };
 
     if let Some(pb) = upload_pb {
         pb.finish_and_clear();
+    }
+
+    // Remember this directory → page so the next `pipa deploy <dir>` updates it
+    // instead of creating a duplicate. Non-fatal if it can't be persisted.
+    manifest.remember(&dir, resp.uuid.clone(), resp.url.clone());
+    if let (Err(e), false) = (manifest.save(), json) {
+        eprintln!("  (note: couldn't update deploy manifest: {e})");
     }
 
     if json {

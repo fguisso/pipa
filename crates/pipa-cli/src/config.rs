@@ -15,6 +15,9 @@ pub struct Config {
     pub server: Option<String>,
     #[serde(default)]
     pub device_id: Option<String>,
+    /// Active workspace for `deploy` (Phase 4). `None` = personal workspace.
+    #[serde(default)]
+    pub active_workspace: Option<String>,
 }
 
 pub fn config_dir() -> Result<PathBuf> {

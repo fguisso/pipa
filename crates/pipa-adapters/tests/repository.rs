@@ -9,7 +9,7 @@ mod common;
 use pipa_adapters::SqliteRepository;
 use pipa_core::audit::{AuditAction, AuditEvent};
 use pipa_core::comment::{CommentStatus, NewComment};
-use pipa_core::hit::NewHit;
+use pipa_core::hit::{HitKind, NewHit};
 use pipa_core::page::{Access, Csp, Mode, NewPage, Zone};
 use pipa_core::ports::Repository;
 
@@ -93,6 +93,7 @@ async fn page_crud_round_trip_and_cascade() {
         path: "/".into(),
         referrer: None,
         status: 200,
+        kind: HitKind::Page,
     })
     .await
     .expect("record_hit");
@@ -143,16 +144,18 @@ async fn record_hit_and_stats_shape() {
         .await
         .expect("create page");
 
-    // Insert hits across multiple paths/referrers, varied ip_hashes.
+    // Insert hits across multiple paths/referrers, varied ip_hashes. The
+    // `.jpg` asset request is deliberately included: it must NOT inflate views,
+    // uniques, top_paths, or top_referrers — only `kind = Page` hits count.
     let cases = [
-        ("/", "google.com", "ip1"),
-        ("/", "google.com", "ip2"),
-        ("/", "twitter.com", "ip1"),
-        ("/about", "google.com", "ip3"),
-        ("/about", "google.com", "ip3"), // duplicate ip+path
-        ("/assets/img.jpg", "twitter.com", "ip4"),
+        ("/", "google.com", "ip1", HitKind::Page),
+        ("/", "google.com", "ip2", HitKind::Page),
+        ("/", "twitter.com", "ip1", HitKind::Page),
+        ("/about", "google.com", "ip3", HitKind::Page),
+        ("/about", "google.com", "ip3", HitKind::Page), // duplicate ip+path
+        ("/assets/img.jpg", "twitter.com", "ip4", HitKind::Asset),
     ];
-    for (i, (path, referrer, ip)) in cases.iter().enumerate() {
+    for (i, (path, referrer, ip, kind)) in cases.iter().enumerate() {
         repo.record_hit(NewHit {
             page_uuid: "page-1".into(),
             ts: 200 + i as i64,
@@ -161,23 +164,49 @@ async fn record_hit_and_stats_shape() {
             path: (*path).into(),
             referrer: Some((*referrer).into()),
             status: 200,
+            kind: *kind,
         })
         .await
         .expect("record_hit");
     }
 
     let stats = repo.stats("page-1", 0).await.expect("stats");
-    assert_eq!(stats.views, cases.len() as u64);
-    assert_eq!(stats.uniques, 4, "ip1..ip4");
-    assert_eq!(stats.top_paths.len(), 3);
-    // "/" appears 3 times, "/about" 2, "/assets/img.jpg" 1 → "/" is top
+    // 5 page hits ("/" ×3, "/about" ×2); the asset hit is excluded.
+    assert_eq!(stats.views, 5, "asset request must not count as a view");
+    assert_eq!(stats.uniques, 3, "ip1..ip3 (ip4 only hit an asset)");
+    assert_eq!(stats.top_paths.len(), 2, "asset path excluded from top paths");
+    // "/" appears 3 times, "/about" 2 → "/" is top
     assert_eq!(stats.top_paths[0].0, "/");
     assert_eq!(stats.top_paths[0].1, 3);
-    // google.com appears 4 times, twitter.com 2 → google.com is top
+    // Referrers count page hits only: google.com ×4, twitter.com ×1 (its other
+    // occurrence was on the excluded asset request).
     assert_eq!(stats.top_referrers[0].0, "google.com");
     assert_eq!(stats.top_referrers[0].1, 4);
 
-    // since_ts filters older rows out.
+    // A self-referrer (the page's own URL, as assets and internal reloads
+    // carry) must be scrubbed from the referrer breakdown.
+    repo.record_hit(NewHit {
+        page_uuid: "page-1".into(),
+        ts: 500,
+        ip_hash: "ip9".into(),
+        ua_hash: None,
+        path: "/".into(),
+        referrer: Some("http://127.0.0.1:8080/p/page-1/index.html".into()),
+        status: 200,
+        kind: HitKind::Page,
+    })
+    .await
+    .expect("record_hit self-ref");
+    let scrubbed = repo.stats("page-1", 0).await.expect("stats scrubbed");
+    assert!(
+        scrubbed
+            .top_referrers
+            .iter()
+            .all(|(r, _)| !r.contains("/p/page-1/")),
+        "self-referrers must be scrubbed",
+    );
+
+    // since_ts filters older rows out (all hits are at ts ≤ 500).
     let recent = repo.stats("page-1", 10_000).await.expect("stats recent");
     assert_eq!(recent.views, 0);
 }

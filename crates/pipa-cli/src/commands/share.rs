@@ -39,17 +39,36 @@ pub async fn run(args: ShareArgs, json: bool) -> Result<()> {
         ensure_feature(&client, &token, "zone", "--zone", args.force).await?;
     }
 
+    // Guard: --no-wait/--resume only make sense for a loosening change (the only
+    // kind that triggers step-up). Refuse them on a plain tightening edit rather
+    // than silently ignoring.
+    if (args.no_wait || args.resume) && !loosening {
+        bail!(
+            "--no-wait/--resume only apply to a loosening change (--access noauth or --zone public)"
+        );
+    }
+
+    const OP: &str = "page.weaken_security";
     let stepup_code = if loosening {
-        let outcome = stepup::drive(
-            &client,
-            &token,
-            &format!("LOOSEN security on page {}", args.uuid),
-            "page.weaken_security",
-            Some(&args.uuid),
-            json,
-        )
-        .await?;
-        Some(outcome.code)
+        if args.no_wait {
+            stepup::init_no_wait(&client, &token, OP, Some(&args.uuid), json).await?;
+            return Ok(());
+        }
+        let code = if args.resume {
+            stepup::resume(&client, OP, Some(&args.uuid)).await?.code
+        } else {
+            stepup::drive(
+                &client,
+                &token,
+                &format!("LOOSEN security on page {}", args.uuid),
+                OP,
+                Some(&args.uuid),
+                json,
+            )
+            .await?
+            .code
+        };
+        Some(code)
     } else {
         None
     };

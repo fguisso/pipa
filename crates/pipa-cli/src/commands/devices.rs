@@ -1,6 +1,6 @@
 //! `pipa devices [ls|revoke <id>]`.
 
-use anyhow::Result;
+use anyhow::{Result, bail};
 use tabled::settings::Style;
 use tabled::{Table, Tabled};
 
@@ -28,7 +28,7 @@ struct Row {
     you: String,
 }
 
-pub async fn run(args: DevicesArgs) -> Result<()> {
+pub async fn run(args: DevicesArgs, json: bool) -> Result<()> {
     let action = args.action.unwrap_or(DevicesAction::Ls);
     let cfg = config::load();
     let me = cfg.device_id.clone();
@@ -61,23 +61,45 @@ pub async fn run(args: DevicesArgs) -> Result<()> {
             table.with(Style::modern_rounded());
             println!("{table}");
         }
-        DevicesAction::Revoke { id } => {
+        DevicesAction::Revoke {
+            id,
+            no_wait,
+            resume,
+        } => {
             let (client, _server, access) = client_with_access("manage:devices").await?;
-            let stepup_code = if Some(&id) != me.as_ref() {
-                let outcome = stepup::drive(
+            let is_self = Some(&id) == me.as_ref();
+            const OP: &str = "device.revoke";
+
+            // Revoking your own device is not destructive to others and needs no
+            // confirmation — the step-up flags don't apply.
+            if is_self {
+                if no_wait || resume {
+                    bail!("--no-wait/--resume only apply when revoking ANOTHER device");
+                }
+                client.revoke_device(&access, &id, None).await?;
+                println!("{} revoked {}", check(), id);
+                return Ok(());
+            }
+
+            if no_wait {
+                stepup::init_no_wait(&client, &access, OP, Some(&id), json).await?;
+                return Ok(());
+            }
+            let code = if resume {
+                stepup::resume(&client, OP, Some(&id)).await?.code
+            } else {
+                stepup::drive(
                     &client,
                     &access,
                     &format!("REVOKE device {id}"),
-                    "device.revoke",
+                    OP,
                     Some(&id),
-                    false,
+                    json,
                 )
-                .await?;
-                Some(outcome.code)
-            } else {
-                None
+                .await?
+                .code
             };
-            client.revoke_device(&access, &id, stepup_code.as_deref()).await?;
+            client.revoke_device(&access, &id, Some(&code)).await?;
             println!("{} revoked {}", check(), id);
         }
     }

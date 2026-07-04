@@ -66,6 +66,8 @@ pub struct DeployParams {
     pub zone: Option<String>,
     pub password: Option<String>,
     pub csp: Option<String>,
+    /// Phase 4: workspace a NEW page is created in. Ignored on update.
+    pub workspace: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]

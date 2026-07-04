@@ -12,7 +12,7 @@ use axum_extra::extract::cookie::{Cookie, CookieJar, SameSite};
 use base64::Engine as _;
 use bytes::Bytes;
 use pipa_adapters::verify_password;
-use pipa_core::{Access, Csp, Mode, NewHit, Page};
+use pipa_core::{Access, Csp, HitKind, Mode, NewHit, Page};
 use hmac::{Hmac, Mac};
 use serde::Deserialize;
 use sha2::Sha256;
@@ -235,6 +235,7 @@ async fn serve_file(
                             real_ip,
                             headers,
                             404,
+                            path_kind(&rel),
                         );
                         return Ok(not_found_response());
                     }
@@ -247,6 +248,7 @@ async fn serve_file(
                     real_ip,
                     headers,
                     404,
+                    path_kind(&rel),
                 );
                 return Ok(not_found_response());
             }
@@ -257,6 +259,14 @@ async fn serve_file(
         .first_or_octet_stream()
         .to_string();
 
+    // A page view is a served HTML document; every other content type is a
+    // sub-resource. This is what keeps `gapes stats` counting one navigation as
+    // one view instead of one-per-asset.
+    let kind = if is_html_mime(&mime) {
+        HitKind::Page
+    } else {
+        HitKind::Asset
+    };
     record_hit_async(
         state.clone(),
         page.uuid.clone(),
@@ -264,6 +274,7 @@ async fn serve_file(
         real_ip,
         headers,
         status,
+        kind,
     );
 
     // When comments are enabled, inject the widget <script> tag at request
@@ -301,6 +312,24 @@ async fn serve_file(
     Ok(resp)
 }
 
+/// Classify a request path as a page view or an asset fetch when we have no
+/// response MIME to go on (the 404 branches): an extensionless route or an
+/// `.html`/`.htm` path is a page; anything else is an asset. Mirrors the
+/// backfill heuristic in migration 0009.
+fn path_kind(path: &str) -> HitKind {
+    let last = path.trim_end_matches('/').rsplit('/').next().unwrap_or(path);
+    let is_page = last.is_empty()
+        || !last.contains('.')
+        || last.ends_with(".html")
+        || last.ends_with(".htm");
+    if is_page {
+        HitKind::Page
+    } else {
+        HitKind::Asset
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
 fn record_hit_async(
     state: AppState,
     page_uuid: String,
@@ -308,6 +337,7 @@ fn record_hit_async(
     real_ip: &RealIp,
     headers: &HeaderMap,
     status: u16,
+    kind: HitKind,
 ) {
     let ip_hash = hmac_ip(&state, &real_ip.0);
     let ua_hash = headers
@@ -333,6 +363,7 @@ fn record_hit_async(
             path,
             referrer,
             status: status as i32,
+            kind,
         };
         if let Err(e) = state.repo.record_hit(hit).await {
             tracing::warn!(error = %e, "failed to record hit");

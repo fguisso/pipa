@@ -12,7 +12,7 @@ use crate::auth::AuthClaims;
 use crate::error::{ApiError, ServerError};
 use crate::state::AppState;
 
-use super::util::{require_read, unix_now};
+use super::util::{caller_identity, require_page_access, require_read, unix_now};
 
 #[derive(Debug, Deserialize)]
 pub struct StatsQuery {
@@ -35,9 +35,13 @@ pub async fn stats(
 ) -> Result<Json<StatsResponse>, ServerError> {
     require_read(&claims, &uuid)?;
 
-    if state.repo.find_page(&uuid).await?.is_none() {
-        return Err(ApiError::not_found("page_not_found", "no page with that uuid").into());
-    }
+    let page = state
+        .repo
+        .find_page(&uuid)
+        .await?
+        .ok_or_else(|| ApiError::not_found("page_not_found", "no page with that uuid"))?;
+    let caller = caller_identity(&state, &claims).await;
+    require_page_access(&state, &caller, &page, false).await?;
 
     let range = q.range.unwrap_or_else(|| "7d".into());
     let since_ts = since_for(&range)?;

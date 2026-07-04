@@ -2025,7 +2025,7 @@ checksum = "a89322df9ebe1c1578d689c92318e070967d1042b512afbe49518723f4e6d5cd"
 
 [[package]]
 name = "pipa-adapters"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "argon2",
@@ -2050,7 +2050,7 @@ dependencies = [
 
 [[package]]
 name = "pipa-cli"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -2077,7 +2077,7 @@ dependencies = [
 
 [[package]]
 name = "pipa-core"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2090,7 +2090,7 @@ dependencies = [
 
 [[package]]
 name = "pipa-sdk"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "axum",
@@ -2105,7 +2105,7 @@ dependencies = [
 
 [[package]]
 name = "pipa-server"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "ammonia",
  "anyhow",

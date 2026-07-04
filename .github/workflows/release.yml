@@ -16,6 +16,9 @@ jobs:
   build:
     name: build ${{ matrix.target }}
     runs-on: ${{ matrix.os }}
+    # Kill a hung job quickly instead of letting it burn to the 24h ceiling
+    # (which is what cancelled the previous release runs).
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
@@ -29,9 +32,8 @@ jobs:
           - target: aarch64-unknown-linux-musl
             os: ubuntu-latest
             cross: true
-          - target: x86_64-apple-darwin
-            os: macos-15
-            cross: false
+          # x86_64-apple-darwin (Intel mac) removed for now — the free runners
+          # are Apple Silicon and the cross build to Intel was the job that hung.
           - target: aarch64-apple-darwin
             os: macos-15
             cross: false
@@ -51,31 +53,30 @@ jobs:
         if: matrix.cross
         run: cargo install cross --locked
 
-      - name: Build
+      - name: Build & stage assets
         shell: bash
         run: |
           set -eu
-          # The `zone` feature ships in release binaries; tweak here if you want
-          # a minimal build per target.
-          FEATURES="--features pipa-server/zone"
-          if [ "${{ matrix.cross }}" = "true" ]; then
-            cross build --release --target ${{ matrix.target }} -p pipa-cli -p pipa-server $FEATURES
-          else
-            cargo build --release --target ${{ matrix.target }} -p pipa-cli -p pipa-server $FEATURES
-          fi
-
-      - name: Stage assets
-        shell: bash
-        run: |
-          set -eu
-          mkdir -p dist
+          target="${{ matrix.target }}"
+          if [ "${{ matrix.cross }}" = "true" ]; then build="cross"; else build="cargo"; fi
           ext=""
-          if [ "${{ matrix.target }}" = "x86_64-pc-windows-msvc" ]; then ext=".exe"; fi
-          for bin in pipa pipa-server; do
-            src="target/${{ matrix.target }}/release/${bin}${ext}"
-            dst="dist/${bin}-${{ matrix.target }}${ext}"
-            cp "$src" "$dst"
-          done
+          if [ "$target" = "x86_64-pc-windows-msvc" ]; then ext=".exe"; fi
+          mkdir -p dist
+
+          # 1) Minimal build — CLI + server with NO feature flags: the simplest
+          #    functional server (single-owner-friendly, most portable). This is
+          #    the `pipa-server-<target>` asset and the `pipa-<target>` CLI that
+          #    install.sh pulls.
+          $build build --release --target "$target" -p pipa-cli -p pipa-server
+          cp "target/$target/release/pipa${ext}"        "dist/pipa-${target}${ext}"
+          cp "target/$target/release/pipa-server${ext}" "dist/pipa-server-${target}${ext}"
+
+          # 2) Full server — every feature flag on (zone + thumbnails). Rebuilds
+          #    pipa-server to the same path, so copy it out under a -full name.
+          $build build --release --target "$target" -p pipa-server \
+            --features pipa-server/zone,pipa-server/thumbnails
+          cp "target/$target/release/pipa-server${ext}" "dist/pipa-server-full-${target}${ext}"
+
           ls -la dist
 
       - name: Upload to release

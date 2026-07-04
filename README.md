@@ -20,11 +20,12 @@ That's the whole product.
 
 - **Static + SPA hosting** at `/p/<uuid>/*` with client-side routing fallback.
 - **Secure by default.** New pages are password-gated. Per page you set *who* can open it (`access`: `password` / `noauth`) and *where* it's reachable (`zone`: `private` = LAN only / `public` = internet only).
-- **Built-in analytics:** views, uniques, top paths, top referrers. No IPs stored.
+- **Accounts & teams.** Beyond the single server-operator ("local" superuser), users can **sign up** (`/signup`, username + password) and get their own pages. Group them into **workspaces** with roles (`owner` / `admin` / `editor` / `viewer`), per-workspace quotas, and page transfer. A user only ever sees its own workspaces.
+- **Built-in analytics:** page views (HTML only — assets don't inflate the count), uniques, top paths, top referrers. No IPs stored.
 - **Built-in comments:** anonymous, markdown-sanitized, owner-moderated, embeddable widget.
-- **Secure CLI:** device-flow login (QR in terminal), OS-keychain credentials, scoped tokens, browser step-up for destructive ops.
-- **Agent-ready.** `--json` output everywhere, capability discovery (`pipa server`), and an installable [agent skill](skills/pipa/SKILL.md) so an AI agent can install and drive pipa.
-- **Admin dashboard** at `/admin`: Alpine.js, no build step, no framework.
+- **Secure CLI:** device-flow login (QR in terminal), OS-keychain credentials, scoped tokens, browser step-up for destructive ops. Pull credentials from **1Password / Bitwarden** (`PIPA_SECRET_GET_CMD`/`PIPA_SECRET_SET_CMD`), and run non-interactively with `--headless` (never touches the keychain, never falls back to a file).
+- **Agent-ready.** `--json` output everywhere, a `--no-wait`/`--resume` login+step-up split so an agent can hand the approval URL to a human and then wait (no backgrounded shell), capability discovery (`pipa server`), and an installable [agent skill](skills/pipa/SKILL.md).
+- **Admin dashboard** at `/admin`: Alpine.js, no build step, no framework. Optional page **thumbnails** (headless-Chromium screenshots, off by default behind a build feature).
 - **One binary.** Rust + axum + SQLite + disk. ~25 MB, runs as non-root, no daemons.
 - **Caddy in front for TLS.** The server is HTTP-only by design.
 

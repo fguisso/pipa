@@ -81,6 +81,16 @@ async fn spawn_static_server(dir: PathBuf) -> anyhow::Result<(u16, JoinHandle<()
     Ok((port, handle))
 }
 
+/// Removes a directory tree on drop — used for the throwaway Chromium profile so
+/// it's cleaned up whether the capture succeeds, errors, or times out.
+struct DirGuard(PathBuf);
+
+impl Drop for DirGuard {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
+
 /// Drive headless Chromium to screenshot `http://127.0.0.1:<port>/` into
 /// `out_path`. Errors on a missing binary, non-zero exit, empty/absent output,
 /// or timeout.
@@ -91,15 +101,29 @@ async fn run_chromium(
     port: u16,
     out_path: &Path,
 ) -> anyhow::Result<()> {
+    // Give Chromium a disposable, isolated profile. Without an explicit
+    // `--user-data-dir`, Chrome's first-run integration hangs indefinitely under
+    // a fresh/empty HOME (common in servers/containers), blowing the timeout; and
+    // two concurrent captures would fight over the default profile's lock. Keyed
+    // by the ephemeral port, which is unique per in-flight capture.
+    let profile_dir = std::env::temp_dir().join(format!("pipa-thumb-{port}"));
+    let _profile = DirGuard(profile_dir.clone());
+
     let mut cmd = tokio::process::Command::new(chromium_path);
     cmd.arg("--headless=new")
         .arg("--disable-gpu")
         .arg("--no-sandbox")
         .arg("--hide-scrollbars")
+        .arg("--no-first-run")
+        .arg("--no-default-browser-check")
+        .arg(format!("--user-data-dir={}", profile_dir.display()))
         .arg(format!("--window-size={width},{height}"))
         .arg("--virtual-time-budget=4000")
         .arg(format!("--screenshot={}", out_path.display()))
         .arg(format!("http://127.0.0.1:{port}/"))
+        // Kill the Chromium process tree if the timeout below drops this future,
+        // instead of leaking an orphan that keeps running against a dead port.
+        .kill_on_drop(true)
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::piped());
 

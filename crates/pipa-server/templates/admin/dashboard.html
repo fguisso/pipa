@@ -18,6 +18,7 @@
     <table class="gpa-table" x-show="pages.length > 0">
       <thead>
         <tr>
+          {% if thumbnails_enabled %}<th class="gpa-thumb-col"></th>{% endif %}
           <th>id</th>
           <th>name</th>
           <th>mode</th>
@@ -31,6 +32,12 @@
       <tbody>
         <template x-for="p in pages" :key="p.uuid">
           <tr :class="p.archived ? 'gpa-row--archived' : ''">
+            {% if thumbnails_enabled %}
+            <td class="gpa-thumb-col">
+              <img :src="configHref(p.uuid) + '/thumb'" @error="$el.style.display='none'"
+                   width="96" height="64" class="gpa-thumb" alt="" loading="lazy" />
+            </td>
+            {% endif %}
             <td><a :href="configHref(p.uuid)" class="gpa-mono" x-text="shortUuid(p.uuid)"
                    :title="'configure ' + p.uuid"></a></td>
             <td x-text="p.name || '—'"></td>

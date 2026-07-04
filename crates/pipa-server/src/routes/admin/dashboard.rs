@@ -23,6 +23,9 @@ struct DashboardTemplate<'a> {
     pages_json: String,
     events_json: String,
     ui_path_json: String,
+    /// True only in a `thumbnails`-feature build with the runtime toggle on;
+    /// gates the per-page preview column in the template.
+    thumbnails_enabled: bool,
 }
 
 pub async fn dashboard(
@@ -63,6 +66,7 @@ pub async fn dashboard(
         pages_json,
         events_json,
         ui_path_json: serde_json::to_string(path).unwrap_or_else(|_| "\"/admin\"".to_string()),
+        thumbnails_enabled: cfg!(feature = "thumbnails") && state.config.thumbnails.enabled,
     };
     render(tmpl)
 }

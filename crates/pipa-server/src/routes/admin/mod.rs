@@ -15,6 +15,8 @@ mod devices;
 mod page_actions;
 mod pages;
 mod session;
+#[cfg(feature = "thumbnails")]
+mod thumb;
 
 /// Returns an empty router when `[admin] ui_enabled = false`. Otherwise
 /// mounts all admin routes under `[admin] ui_path` (default `/admin`).
@@ -26,7 +28,7 @@ pub fn router(state: &AppState) -> Router<AppState> {
     let path = state.config.admin.ui_path.trim_end_matches('/');
     let path = if path.is_empty() { "/admin" } else { path };
 
-    Router::new()
+    let router = Router::new()
         .route(path, get(dashboard::dashboard))
         .route(&format!("{path}/login"), get(session::login_get).post(session::login_post))
         .route(&format!("{path}/logout"), post(session::logout_post))
@@ -34,6 +36,14 @@ pub fn router(state: &AppState) -> Router<AppState> {
         .route(&format!("{path}/devices"), get(devices::devices_page))
         .route(&format!("{path}/activity"), get(activity::activity_page))
         .route(&format!("{path}/assets/*path"), get(assets::serve_asset))
-        .route("/api/audit/recent", get(activity::recent_audit_json))
-        .merge(page_actions::router())
+        .route("/api/audit/recent", get(activity::recent_audit_json));
+
+    // The thumbnail route only exists in a `thumbnails`-feature build.
+    #[cfg(feature = "thumbnails")]
+    let router = router.route(
+        &format!("{path}/pages/:uuid/thumb"),
+        get(thumb::serve_thumb),
+    );
+
+    router.merge(page_actions::router())
 }

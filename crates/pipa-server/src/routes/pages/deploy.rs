@@ -336,6 +336,13 @@ pub async fn deploy(
     };
     let url = format!("{}/p/{}", base, saved.uuid);
 
+    // Best-effort thumbnail capture (feature-gated). Spawned detached so it
+    // never delays the deploy response; any failure is logged inside `capture`.
+    #[cfg(feature = "thumbnails")]
+    if state.config.thumbnails.enabled {
+        tokio::spawn(crate::thumbnails::capture(state.clone(), page_uuid.clone()));
+    }
+
     Ok(Json(DeployResponse {
         uuid: saved.uuid,
         url,

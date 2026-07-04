@@ -64,6 +64,12 @@ default = []
 # behavior) and carries no zone-detection middleware. Requires an internal
 # reverse proxy + the [zone] config section to be useful.
 zone = []
+# Admin-dashboard page thumbnails. Off by default: heavy, because it shells out
+# to a headless Chromium after each deploy to screenshot the page. When absent,
+# none of the capture code, the gate-bypass token, the `/admin/.../thumb` route,
+# or the dashboard `<img>` is compiled in. Requires a `chromium`/`chrome` binary
+# on the server + the `[thumbnails]` config section.
+thumbnails = []
 # Phase 5 toggles, not implemented yet:
 multi-tenant = []
 pg = []

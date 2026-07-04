@@ -14,6 +14,7 @@ pub struct Config {
     pub auth: AuthConfig,
     pub comments: CommentsConfig,
     pub zone: ZoneConfig,
+    pub thumbnails: ThumbnailsConfig,
 }
 
 impl Default for Config {
@@ -26,6 +27,34 @@ impl Default for Config {
             auth: AuthConfig::default(),
             comments: CommentsConfig::default(),
             zone: ZoneConfig::default(),
+            thumbnails: ThumbnailsConfig::default(),
+        }
+    }
+}
+
+/// Admin-dashboard page thumbnails. Only consumed when the `thumbnails` feature
+/// is compiled into `pipa-server`; the struct is always parsed so a single
+/// `pages.toml` works against both feature builds. Captures a screenshot of each
+/// page after deploy via a headless-Chromium subprocess — heavy, hence a
+/// build-time feature. `enabled` is a runtime kill-switch within a feature build.
+/// `chromium_path` must point at a Chromium/Chrome binary (`chromium`,
+/// `chromium-browser`, `google-chrome`, `chrome`, or an absolute path).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ThumbnailsConfig {
+    pub enabled: bool,
+    pub chromium_path: String,
+    pub width: u32,
+    pub height: u32,
+}
+
+impl Default for ThumbnailsConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            chromium_path: "chromium".to_string(),
+            width: 1200,
+            height: 800,
         }
     }
 }

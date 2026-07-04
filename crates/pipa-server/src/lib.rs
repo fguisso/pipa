@@ -17,6 +17,8 @@ pub mod middleware;
 pub mod routes;
 pub mod serve;
 pub mod state;
+#[cfg(feature = "thumbnails")]
+pub mod thumbnails;
 
 use std::sync::Arc;
 

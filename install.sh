@@ -39,7 +39,10 @@ case "$os" in
     esac ;;
   Darwin)
     case "$arch" in
-      x86_64) target="x86_64-apple-darwin" ;;
+      # Intel Macs have no prebuilt binary (the x86_64-apple-darwin target was
+      # dropped in v0.2.0) and can't run the arm64 build, so fail with a clear
+      # pointer instead of a confusing 404 from the missing asset.
+      x86_64) err "no prebuilt binary for Intel macOS — build from source: cargo install --git https://github.com/${REPO} pipa-cli" ;;
       arm64) target="aarch64-apple-darwin" ;;
       *) err "unsupported macOS arch: $arch" ;;
     esac ;;

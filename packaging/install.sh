@@ -93,8 +93,11 @@ detect_arch() {
     local m
     m="$(uname -m)"
     case "$m" in
-        x86_64|amd64)  echo "x86_64-unknown-linux-gnu" ;;
-        aarch64|arm64) echo "aarch64-unknown-linux-gnu" ;;
+        # musl for both: the release publishes static musl server binaries for
+        # x86_64 and aarch64 (no aarch64 gnu build exists), and static links
+        # dodge host glibc-version skew.
+        x86_64|amd64)  echo "x86_64-unknown-linux-musl" ;;
+        aarch64|arm64) echo "aarch64-unknown-linux-musl" ;;
         *)             die "unsupported CPU arch: $m (need x86_64 or aarch64)" ;;
     esac
 }
@@ -120,7 +123,9 @@ resolve_version() {
 VERSION="$(resolve_version)"
 log "installing version: ${VERSION}"
 
-ASSET="pipa-server-${VERSION}-${TARGET_TRIPLE}.tar.gz"
+# Release assets are raw, statically-linked binaries (no tarball, no version in
+# the name), each with a sibling `<asset>.sha256` for integrity.
+ASSET="pipa-server-${TARGET_TRIPLE}"
 ASSET_URL="https://github.com/${PIPA_REPO}/releases/download/${VERSION}/${ASSET}"
 SHA_URL="${ASSET_URL}.sha256"
 
@@ -143,15 +148,11 @@ log "verifying SHA256"
 )
 log "SHA256 verified"
 
-log "extracting"
-tar -xzf "${TMP}/${ASSET}" -C "${TMP}"
-[[ -f "${TMP}/pipa-server" ]] \
-    || die "archive does not contain pipa-server binary"
-
 # ─── Install ────────────────────────────────────────────────────────────────
+# The downloaded asset is the binary itself — install it directly.
 log "installing binary to ${BIN_DIR}/pipa-server"
 install -d "${BIN_DIR}"
-install -m 0755 "${TMP}/pipa-server" "${BIN_DIR}/pipa-server"
+install -m 0755 "${TMP}/${ASSET}" "${BIN_DIR}/pipa-server"
 
 # ─── Create user/group (system mode only) ───────────────────────────────────
 if [[ "${USER_MODE}" -eq 0 ]]; then

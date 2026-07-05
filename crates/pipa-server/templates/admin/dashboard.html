@@ -5,20 +5,123 @@
 {% block content %}
   {% include "partials/icons.html" %}
   <section x-data="dashboard()" x-init="hydrate()" class="gpa-stack">
+
+    <!-- Recent activity sits up top as a quick pulse: only the latest few
+         events, with a link out to the full audit log for anyone who wants more. -->
     <div class="gpa-row gpa-row--between">
-      <h1>your pages</h1>
-      <button @click="refresh()" :disabled="loading" class="gpa-btn">
-        <span x-show="!loading">refresh</span>
-        <span x-show="loading">loading…</span>
-      </button>
+      <h1>recent activity</h1>
+      <a class="gpa-link" href="{{ ui_path }}/activity" x-show="events.length > 0">view all →</a>
+    </div>
+    <table class="gpa-table" x-show="events.length > 0">
+      <thead>
+        <tr>
+          <th>when</th>
+          <th>action</th>
+          <th>actor</th>
+          <th>target</th>
+          <th>scope</th>
+        </tr>
+      </thead>
+      <tbody>
+        <template x-for="e in events.slice(0, 3)" :key="e.ts + '-' + (e.action || '') + '-' + (e.target || '')">
+          <tr :class="e.success === false ? 'gpa-row--err' : ''">
+            <td x-text="fmtTime(e.ts)"></td>
+            <td class="gpa-mono" x-text="e.action"></td>
+            <td class="gpa-mono" x-text="e.actor"></td>
+            <td class="gpa-mono" x-text="e.target || '—'"></td>
+            <td class="gpa-mono" x-text="e.scope || '—'"></td>
+          </tr>
+        </template>
+      </tbody>
+    </table>
+    <p x-show="events.length === 0" class="gpa-muted">no activity yet.</p>
+
+    <!-- Pages live below the activity pulse. With thumbnails on, a grid/list
+         toggle lets the owner flip between mini-thumb cards (3 per row) and the
+         compact table; the table view never shows a preview. -->
+    <div class="gpa-row gpa-row--between">
+      <h2>your pages</h2>
+      <div class="gpa-row">
+        {% if thumbnails_enabled %}
+        <div class="gpa-viewtoggle" role="group" aria-label="page view">
+          <button type="button" :class="view === 'grid' ? 'is-active' : ''"
+                  @click="setView('grid')" aria-label="grid view" title="grid view">
+            <svg><use href="#icon-grid" /></svg>
+          </button>
+          <button type="button" :class="view === 'list' ? 'is-active' : ''"
+                  @click="setView('list')" aria-label="list view" title="list view">
+            <svg><use href="#icon-list" /></svg>
+          </button>
+        </div>
+        {% endif %}
+        <button @click="refresh()" :disabled="loading" class="gpa-btn">
+          <span x-show="!loading">refresh</span>
+          <span x-show="loading">loading…</span>
+        </button>
+      </div>
     </div>
 
     <div x-show="error" class="gpa-error" x-text="error"></div>
 
-    <table class="gpa-table" x-show="pages.length > 0">
+    {% if thumbnails_enabled %}
+    <!-- Mini-thumb grid: 3 cards per row, preview on top. -->
+    <div class="gpa-grid" x-show="view === 'grid' && pages.length > 0">
+      <template x-for="p in pages" :key="p.uuid">
+        <article class="gpa-pcard" :class="p.archived ? 'gpa-pcard--archived' : ''">
+          <a :href="configHref(p.uuid)" class="gpa-pcard-thumb" :title="'configure ' + p.uuid">
+            <img :src="configHref(p.uuid) + '/thumb'" @error="$el.style.visibility='hidden'"
+                 class="gpa-thumb" alt="" loading="lazy" />
+          </a>
+          <div class="gpa-pcard-body">
+            <a :href="configHref(p.uuid)" class="gpa-pcard-name"
+               x-text="p.name || shortUuid(p.uuid)" :title="p.uuid"></a>
+            <div class="gpa-pcard-pills">
+              <span class="gpa-pill" :class="'gpa-pill--' + p.access" x-text="p.access"></span>
+              <span class="gpa-pill" :class="'gpa-pill--' + p.zone" x-text="p.zone"></span>
+              <template x-if="p.archived">
+                <span class="gpa-pill gpa-pill--archived">archived</span>
+              </template>
+            </div>
+            <div class="gpa-pcard-foot">
+              <span class="gpa-muted gpa-pcard-stats"
+                    x-text="fmtBytes(p.size_bytes) + ' · ' + p.file_count + ' files'"></span>
+              <div class="gpa-actions">
+                <a class="gpa-icon-btn" :href="publicHref(p.uuid)" target="_blank" rel="noopener"
+                   title="open page in new tab" aria-label="open page">
+                  <svg><use href="#icon-open" /></svg>
+                </a>
+                <template x-if="!p.archived">
+                  <button class="gpa-icon-btn" @click="toggleArchive(p, true)"
+                          :disabled="busyUuid === p.uuid"
+                          title="archive (unpublish, keep files)" aria-label="archive">
+                    <svg><use href="#icon-archive" /></svg>
+                  </button>
+                </template>
+                <template x-if="p.archived">
+                  <button class="gpa-icon-btn" @click="toggleArchive(p, false)"
+                          :disabled="busyUuid === p.uuid"
+                          title="unarchive (republish)" aria-label="unarchive">
+                    <svg><use href="#icon-unarchive" /></svg>
+                  </button>
+                </template>
+                <button class="gpa-icon-btn gpa-icon-btn--danger"
+                        @click="openDeleteModal(p)"
+                        :disabled="busyUuid === p.uuid"
+                        title="delete permanently" aria-label="delete">
+                  <svg><use href="#icon-trash" /></svg>
+                </button>
+              </div>
+            </div>
+          </div>
+        </article>
+      </template>
+    </div>
+    {% endif %}
+
+    <table class="gpa-table"
+           x-show="pages.length > 0{% if thumbnails_enabled %} && view === 'list'{% endif %}">
       <thead>
         <tr>
-          {% if thumbnails_enabled %}<th class="gpa-thumb-col"></th>{% endif %}
           <th>id</th>
           <th>name</th>
           <th>mode</th>
@@ -32,12 +135,6 @@
       <tbody>
         <template x-for="p in pages" :key="p.uuid">
           <tr :class="p.archived ? 'gpa-row--archived' : ''">
-            {% if thumbnails_enabled %}
-            <td class="gpa-thumb-col">
-              <img :src="configHref(p.uuid) + '/thumb'" @error="$el.style.display='none'"
-                   width="96" height="64" class="gpa-thumb" alt="" loading="lazy" />
-            </td>
-            {% endif %}
             <td><a :href="configHref(p.uuid)" class="gpa-mono" x-text="shortUuid(p.uuid)"
                    :title="'configure ' + p.uuid"></a></td>
             <td x-text="p.name || '—'"></td>
@@ -87,30 +184,6 @@
       no pages yet — deploy one with <code>pipa deploy ./dist</code>.
     </p>
 
-    <h2>recent activity</h2>
-    <table class="gpa-table" x-show="events.length > 0">
-      <thead>
-        <tr>
-          <th>when</th>
-          <th>action</th>
-          <th>actor</th>
-          <th>target</th>
-          <th>scope</th>
-        </tr>
-      </thead>
-      <tbody>
-        <template x-for="e in events" :key="e.ts + '-' + (e.action || '') + '-' + (e.target || '')">
-          <tr :class="e.success === false ? 'gpa-row--err' : ''">
-            <td x-text="fmtTime(e.ts)"></td>
-            <td class="gpa-mono" x-text="e.action"></td>
-            <td class="gpa-mono" x-text="e.actor"></td>
-            <td class="gpa-mono" x-text="e.target || '—'"></td>
-            <td class="gpa-mono" x-text="e.scope || '—'"></td>
-          </tr>
-        </template>
-      </tbody>
-    </table>
-
     <!-- Delete confirm modal — prompts archive as the safer default. -->
     <template x-if="deleteTarget">
       <div class="gpa-modal-overlay" @click.self="deleteTarget = null">
@@ -151,16 +224,23 @@
   window.__PIPA_ADMIN_BOOTSTRAP = {
     pages: {{ pages_json|safe }},
     events: {{ events_json|safe }},
-    ui_path: {{ ui_path_json|safe }}
+    ui_path: {{ ui_path_json|safe }},
+    thumbnails: {% if thumbnails_enabled %}true{% else %}false{% endif %}
   };
 </script>
 <script src="{{ ui_path }}/assets/admin.js"></script>
 <script>
   function dashboard() {
     const boot = window.__PIPA_ADMIN_BOOTSTRAP;
+    const savedView = (() => {
+      try { return localStorage.getItem('gpa.pagesView'); } catch (_) { return null; }
+    })();
     return {
       pages: boot.pages || [],
       events: boot.events || [],
+      // Grid (mini-thumb) is only meaningful when thumbnails are on; otherwise
+      // the table is the only view. Remember the owner's last choice.
+      view: boot.thumbnails ? (savedView === 'list' ? 'list' : 'grid') : 'list',
       loading: false,
       busyUuid: '',
       deleteTarget: null,
@@ -171,6 +251,10 @@
       fmtBytes: gpa.fmtBytes,
       fmtTime: gpa.fmtTime,
       hydrate() {},
+      setView(v) {
+        this.view = v;
+        try { localStorage.setItem('gpa.pagesView', v); } catch (_) {}
+      },
       async refresh() {
         this.loading = true; this.error = '';
         try {

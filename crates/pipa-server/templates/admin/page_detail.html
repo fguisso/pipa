@@ -77,7 +77,8 @@
           <p x-show="!commentsLoading && comments.length === 0" class="gpa-muted">
             no comments yet.
           </p>
-          <table class="gpa-table" x-show="comments.length > 0">
+          <div class="gpa-tablewrap" x-show="comments.length > 0">
+          <table class="gpa-table">
             <thead>
               <tr>
                 <th>when</th>
@@ -107,6 +108,7 @@
               </template>
             </tbody>
           </table>
+          </div>
         </section>
 
         <section class="gpa-card">

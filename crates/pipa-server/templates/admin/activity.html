@@ -10,6 +10,7 @@
     {% if events.is_empty() %}
       <p class="gpa-muted">no events recorded yet.</p>
     {% else %}
+      <div class="gpa-tablewrap">
       <table class="gpa-table">
         <thead>
           <tr>
@@ -36,6 +37,7 @@
           {% endfor %}
         </tbody>
       </table>
+      </div>
     {% endif %}
   </section>
 {% endblock %}

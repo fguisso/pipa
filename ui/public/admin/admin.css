@@ -67,6 +67,10 @@ input[type=text]:focus, input[type=password]:focus { outline: none; border-color
 .gpa-btn--xs { padding: 0.25rem 0.55rem; font-size: 0.78rem; margin-right: 0.25rem; }
 .gpa-error { background: rgba(255, 118, 118, 0.1); color: var(--danger); border: 1px solid rgba(255, 118, 118, 0.3); padding: 0.55rem 0.75rem; border-radius: 6px; font-size: 0.85rem; }
 .gpa-link { color: var(--accent); font-size: 0.85rem; }
+/* Wide data tables (audit/devices/comments) can exceed the 1100px main column
+   because of long ULIDs + JSON details. Wrap them so the overflow scrolls
+   inside the box instead of pushing the whole page wider than the viewport. */
+.gpa-tablewrap { overflow-x: auto; max-width: 100%; }
 .gpa-table { width: 100%; border-collapse: collapse; background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
 .gpa-table th, .gpa-table td { padding: 0.55rem 0.75rem; text-align: left; font-size: 0.85rem; border-bottom: 1px solid var(--border-soft); }
 .gpa-table th { color: var(--text-faint); font-weight: 500; text-transform: uppercase; font-size: 0.72rem; letter-spacing: 0.05em; background: var(--bg-soft); }

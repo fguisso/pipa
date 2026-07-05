@@ -15,7 +15,8 @@
     <div x-show="error" class="gpa-error" x-text="error"></div>
     <p x-show="loading" class="gpa-muted">loading…</p>
 
-    <table class="gpa-table" x-show="!loading && visible.length > 0">
+    <div class="gpa-tablewrap" x-show="!loading && visible.length > 0">
+    <table class="gpa-table">
       <thead>
         <tr>
           <th>id</th>
@@ -54,6 +55,7 @@
         </template>
       </tbody>
     </table>
+    </div>
 
     <p x-show="!loading && visible.length === 0" class="gpa-muted">no devices.</p>
 

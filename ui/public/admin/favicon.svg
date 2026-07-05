@@ -1,5 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 170 330" role="img" aria-label="pipa">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" role="img" aria-label="pipa">
   <title>pipa</title>
-  <text transform="translate(5.52 250.66)" fill="#fff" font-family="'Didact Gothic', 'Inter', sans-serif" font-size="296.85">g</text>
-  <polygon points="60.34 198.02 84.8 150.91 107.45 198.02 60.34 198.02" fill="#fff"/>
+  <polygon points="18 82 50 18 82 82" fill="#fff"/>
 </svg>

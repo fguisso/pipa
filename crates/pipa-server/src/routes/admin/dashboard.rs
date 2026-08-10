@@ -8,7 +8,7 @@ use axum::extract::State;
 use axum::http::{StatusCode, header};
 use axum::response::{IntoResponse, Response};
 
-use crate::routes::pages::util::{OWNER_ID_LOCAL, OWNER_KIND_LOCAL, PageView};
+use crate::routes::pages::util::enrich_owner_labels;
 use crate::state::AppState;
 
 use super::activity::audit_events_to_json;
@@ -40,12 +40,12 @@ pub async fn dashboard(
         }
     };
 
-    let pages = state
-        .repo
-        .list_pages(OWNER_KIND_LOCAL, OWNER_ID_LOCAL)
-        .await
-        .unwrap_or_default();
-    let pages_view: Vec<PageView> = pages.iter().map(PageView::from).collect();
+    // The operator is the superuser: show every page, regardless of which user
+    // or workspace owns it, each tagged with a human-readable owner. This
+    // matches what `GET /api/pages` returns on refresh, so first paint and
+    // refresh agree.
+    let pages = state.repo.list_all_pages().await.unwrap_or_default();
+    let pages_view = enrich_owner_labels(&state, &pages).await;
     let pages_json =
         serde_json::to_string(&pages_view).unwrap_or_else(|_| "[]".to_string());
 

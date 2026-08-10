@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>your sites — pipa</title>
+    <style>
+      :root { color-scheme: light dark; }
+      body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        background: #0f1115; color: #e6e6e6; }
+      main { max-width: 900px; margin: 0 auto; padding: 2rem 1.25rem; }
+      header { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 1.5rem; }
+      h1 { font-size: 1.15rem; margin: 0; }
+      h2 { font-size: 0.95rem; color: #9aa3b2; margin: 1.75rem 0 0.6rem;
+        text-transform: uppercase; letter-spacing: 0.05em; }
+      a { color: #7aa2ff; }
+      nav a { margin-left: 0.9rem; font-size: 0.85rem; }
+      .card { border: 1px solid #232733; border-radius: 10px; padding: 1rem 1.1rem; margin-bottom: 1rem; }
+      .card h3 { margin: 0 0 0.15rem; font-size: 1rem; }
+      .badge { font-size: 0.72rem; padding: 0.1rem 0.45rem; border-radius: 999px; background: #1f2330; color: #c9d0db; }
+      .badge.public { background: #14351f; color: #86e0a6; }
+      .badge.password { background: #3a2f14; color: #e8c977; }
+      .badge.archived { background: #2a2f3d; color: #9aa3b2; }
+      table { width: 100%; border-collapse: collapse; font-size: 0.85rem; margin-top: 0.6rem; }
+      th, td { text-align: left; padding: 0.45rem 0.5rem; border-bottom: 1px solid #232733; }
+      th { color: #7c8595; font-weight: 500; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.04em; }
+      td.num { text-align: right; font-variant-numeric: tabular-nums; }
+      .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.8rem; }
+      .muted { color: #6b7280; }
+      .row-archived td { opacity: 0.55; }
+      form.inline { display: inline; }
+      button { background: #2a2f3d; color: #fff; border: 0; border-radius: 6px;
+        padding: 0.32rem 0.7rem; font-size: 0.78rem; cursor: pointer; }
+      button:hover { filter: brightness(1.15); }
+      details.cli { margin-top: 0.7rem; }
+      details.cli summary { cursor: pointer; color: #7c8595; font-size: 0.78rem; }
+      pre { background: #171a21; border: 1px solid #232733; border-radius: 6px;
+        padding: 0.6rem 0.75rem; overflow-x: auto; font-size: 0.78rem; margin: 0.5rem 0 0; }
+    </style>
+    <link rel="icon" type="image/svg+xml" href="/admin/assets/favicon.svg" />
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>your sites · {{ username }}</h1>
+        <nav>
+          <a href="/dashboard">sites</a>
+          <a href="/workspaces">workspaces</a>
+          <a href="/account">account</a>
+          <form method="post" action="/logout" class="inline">
+            <button>sign out</button>
+          </form>
+        </nav>
+      </header>
+
+      {% if total_pages == 0 %}
+        <div class="card">
+          <p class="muted" style="margin:0">
+            no sites yet. deploy one from your terminal:
+          </p>
+          <pre>pipa login          # approve this browser account
+pipa deploy ./dist  # ship a folder → get a URL</pre>
+        </div>
+      {% endif %}
+
+      {% for w in workspaces %}
+      <h2>{{ w.name }} <span class="badge">{{ w.role }}</span></h2>
+      {% if w.pages.is_empty() %}
+        <p class="muted">no sites in this workspace yet.</p>
+      {% else %}
+      <table>
+        <thead>
+          <tr>
+            <th>id</th><th>name</th><th>access</th><th>zone</th>
+            <th class="num">size</th><th class="num">files</th><th>updated</th><th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for p in w.pages %}
+          <tr class="{% if p.archived %}row-archived{% endif %}">
+            <td class="mono">{{ p.short_uuid }}</td>
+            <td>{{ p.name }}{% if p.archived %} <span class="badge archived">archived</span>{% endif %}</td>
+            <td><span class="badge {{ p.access }}">{{ p.access }}</span></td>
+            <td>{{ p.zone }}</td>
+            <td class="num">{{ p.size }}</td>
+            <td class="num">{{ p.files }}</td>
+            <td class="muted">{{ p.updated }}</td>
+            <td><a href="/p/{{ p.uuid }}/" target="_blank" rel="noopener">open ↗</a></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% endif %}
+      {% endfor %}
+
+      <details class="cli">
+        <summary>manage sites from the CLI</summary>
+        <p class="muted" style="font-size:0.8rem">
+          Deploys and destructive changes (delete, make public) run through the
+          <code>pipa</code> CLI, which confirms sensitive actions on a second
+          device.
+        </p>
+        <pre>pipa deploy ./dist                 # deploy / update a site
+pipa ls                            # list your sites
+pipa share &lt;id&gt; --zone public      # change visibility (step-up)
+pipa rm &lt;id&gt;                        # delete a site (step-up)</pre>
+      </details>
+    </main>
+  </body>
+</html>

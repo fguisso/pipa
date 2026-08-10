@@ -14,6 +14,8 @@
       h2 { font-size: 0.95rem; color: #9aa3b2; margin: 1.75rem 0 0.6rem;
         text-transform: uppercase; letter-spacing: 0.05em; }
       a { color: #7aa2ff; }
+      nav a { margin-left: 0.9rem; font-size: 0.85rem; }
+      nav form.inline { display: inline; margin-left: 0.9rem; }
       table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
       th, td { text-align: left; padding: 0.5rem 0.6rem; border-bottom: 1px solid #232733; }
       th { color: #7c8595; font-weight: 500; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; }
@@ -32,10 +34,15 @@
   <body>
     <main>
       <header>
-        <h1>{{ username }}</h1>
-        <form method="post" action="/logout" class="logout">
-          <button style="background:#2a2f3d">sign out</button>
-        </form>
+        <h1>account · {{ username }}</h1>
+        <nav>
+          <a href="/dashboard">sites</a>
+          <a href="/workspaces">workspaces</a>
+          <a href="/account">account</a>
+          <form method="post" action="/logout" class="logout inline">
+            <button style="background:#2a2f3d">sign out</button>
+          </form>
+        </nav>
       </header>
 
       <h2>your CLI devices</h2>

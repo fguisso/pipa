@@ -246,7 +246,9 @@ async fn finish_session(
 
     let cookie_value = sign_cookie(&state.hmac_key, &session.id);
     let cookie_header = set_cookie_header(&cookie_value, state.config.server.dev);
-    let target = safe_next(next);
+    // Default landing is the user's own dashboard, not `/` (which routes the
+    // operator to the admin UI); an explicit safe `?next=` still wins.
+    let target = safe_next(next.or(Some("/dashboard")));
     let mut resp = Redirect::to(&target).into_response();
     resp.headers_mut().insert(header::SET_COOKIE, cookie_header);
     resp

@@ -13,7 +13,10 @@ use crate::auth::{AuthClaims, check_scope};
 use crate::error::{ApiError, ServerError};
 use crate::state::AppState;
 
-use super::util::{CallerIdentity, PageView, caller_identity, require_page_access, require_read};
+use super::util::{
+    CallerIdentity, PageView, caller_identity, enrich_owner_labels, require_page_access,
+    require_read,
+};
 
 #[derive(Debug, Serialize)]
 pub struct ListResponse {
@@ -42,7 +45,7 @@ pub async fn list_pages(
         }
     };
     Ok(Json(ListResponse {
-        pages: rows.iter().map(PageView::from).collect(),
+        pages: enrich_owner_labels(&state, &rows).await,
     }))
 }
 

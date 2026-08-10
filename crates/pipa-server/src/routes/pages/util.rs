@@ -6,6 +6,7 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use pipa_core::device::AccessTokenClaims;
+use pipa_core::workspace::WorkspaceKind;
 use pipa_core::{Access, Page};
 use serde::Serialize;
 
@@ -51,6 +52,47 @@ pub async fn caller_identity(state: &AppState, claims: &AccessTokenClaims) -> Ca
 /// migration 0011 and `create_user`).
 pub fn personal_workspace_id(user_id: &str) -> String {
     format!("ws-{user_id}")
+}
+
+/// Resolve a page's owner into a human-readable label:
+///   - `local`     → `operator`
+///   - personal ws → `@<username>` of the workspace owner
+///   - team ws     → the workspace name
+///   - legacy user → `@<username>`
+/// Falls back to the raw owner id if a lookup misses. One DB round-trip (two for
+/// a personal workspace); callers batch via [`enrich_owner_labels`].
+pub async fn owner_label(state: &AppState, page: &Page) -> String {
+    match page.owner_kind.as_str() {
+        OWNER_KIND_LOCAL => "operator".to_string(),
+        OWNER_KIND_WORKSPACE => match state.auth.get_workspace(&page.owner_id).await.ok().flatten() {
+            Some(ws) if matches!(ws.kind, WorkspaceKind::Personal) => {
+                let uid = page.owner_id.strip_prefix("ws-").unwrap_or(&page.owner_id);
+                match state.auth.find_user_by_id(uid).await.ok().flatten() {
+                    Some(u) => format!("@{}", u.username),
+                    None => ws.name,
+                }
+            }
+            Some(ws) => ws.name,
+            None => page.owner_id.clone(),
+        },
+        OWNER_KIND_USER => match state.auth.find_user_by_id(&page.owner_id).await.ok().flatten() {
+            Some(u) => format!("@{}", u.username),
+            None => page.owner_id.clone(),
+        },
+        _ => page.owner_id.clone(),
+    }
+}
+
+/// Map pages to `PageView`s with `owner_label` filled in. Sequential lookups —
+/// fine for dashboard-sized lists (tens of pages), not a bulk export path.
+pub async fn enrich_owner_labels(state: &AppState, pages: &[Page]) -> Vec<PageView> {
+    let mut out = Vec::with_capacity(pages.len());
+    for p in pages {
+        let mut v = PageView::from(p);
+        v.owner_label = owner_label(state, p).await;
+        out.push(v);
+    }
+    out
 }
 
 /// Enforce access to an existing page after the scope check. `need_write` gates
@@ -193,6 +235,11 @@ pub struct PageView {
     pub zone: String,
     pub owner_kind: String,
     pub owner_id: String,
+    /// Human-readable owner (e.g. `@alice`, a team name, or `operator`).
+    /// Populated by `enrich_owner_labels`; empty otherwise, so the CLI/SDK
+    /// JSON contract is unchanged when we don't resolve it.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub owner_label: String,
     pub size_bytes: u64,
     pub file_count: u64,
     pub comments_enabled: bool,
@@ -213,6 +260,7 @@ impl From<&Page> for PageView {
             zone: p.zone.as_str().to_string(),
             owner_kind: p.owner_kind.clone(),
             owner_id: p.owner_id.clone(),
+            owner_label: String::new(),
             size_bytes: p.size_bytes,
             file_count: p.file_count,
             comments_enabled: p.comments_enabled,

@@ -30,6 +30,8 @@
       form.inline { display: inline; }
       .rowforms { display: flex; gap: 0.4rem; align-items: center; flex-wrap: wrap; margin-top: 0.7rem; }
       .muted { color: #6b7280; }
+      nav a { margin-left: 0.9rem; font-size: 0.85rem; }
+      nav form.inline { display: inline; margin-left: 0.9rem; }
     </style>
     <link rel="icon" type="image/svg+xml" href="/admin/assets/favicon.svg" />
   </head>
@@ -37,9 +39,12 @@
     <main>
       <header>
         <h1>workspaces · {{ username }}</h1>
-        <span><a href="/account">account</a> &nbsp;
+        <nav>
+          <a href="/dashboard">sites</a>
+          <a href="/workspaces">workspaces</a>
+          <a href="/account">account</a>
           <form method="post" action="/logout" class="inline"><button style="background:#2a2f3d">sign out</button></form>
-        </span>
+        </nav>
       </header>
 
       <h2>create a workspace</h2>

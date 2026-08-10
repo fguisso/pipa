@@ -7,6 +7,7 @@ pub mod account;
 pub mod admin;
 pub mod auth;
 pub mod comments;
+pub mod dashboard;
 pub mod devices;
 pub mod health;
 pub mod meta;
@@ -35,6 +36,7 @@ pub fn router(state: AppState) -> Router {
         .merge(meta::router())
         .merge(auth::router())
         .merge(account::router())
+        .merge(dashboard::router())
         .merge(devices::router())
         .merge(pages::router(&state))
         .merge(workspaces::router())

@@ -160,6 +160,7 @@ input[type=text]:focus, input[type=password]:focus { outline: none; border-color
 .gpa-pcard-name { font-size: 0.9rem; color: var(--text); text-decoration: none; font-weight: 500;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .gpa-pcard-name:hover { color: var(--accent); }
+.gpa-pcard-owner { font-size: 0.72rem; margin: -0.25rem 0 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .gpa-pcard-pills { display: flex; flex-wrap: wrap; gap: 0.3rem; }
 .gpa-pcard-foot { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-top: auto; }
 .gpa-pcard-stats { font-size: 0.75rem; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

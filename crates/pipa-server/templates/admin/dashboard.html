@@ -77,6 +77,8 @@
           <div class="gpa-pcard-body">
             <a :href="configHref(p.uuid)" class="gpa-pcard-name"
                x-text="p.name || shortUuid(p.uuid)" :title="p.uuid"></a>
+            <div class="gpa-muted gpa-pcard-owner gpa-mono" x-show="p.owner_label"
+                 x-text="p.owner_label"></div>
             <div class="gpa-pcard-pills">
               <span class="gpa-pill" :class="'gpa-pill--' + p.access" x-text="p.access"></span>
               <span class="gpa-pill" :class="'gpa-pill--' + p.zone" x-text="p.zone"></span>
@@ -127,6 +129,7 @@
         <tr>
           <th>id</th>
           <th>name</th>
+          <th>owner</th>
           <th>mode</th>
           <th>state</th>
           <th class="gpa-num">size</th>
@@ -141,6 +144,7 @@
             <td><a :href="configHref(p.uuid)" class="gpa-mono" x-text="shortUuid(p.uuid)"
                    :title="'configure ' + p.uuid"></a></td>
             <td x-text="p.name || '—'"></td>
+            <td class="gpa-mono" x-text="p.owner_label || '—'"></td>
             <td x-text="p.mode"></td>
             <td>
               <span class="gpa-pill" :class="'gpa-pill--' + p.access" x-text="p.access"></span>

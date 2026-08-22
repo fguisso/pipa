@@ -41,6 +41,7 @@ async fn run() -> Result<()> {
         cli::Command::Stats(c) => commands::stats::run(c, json).await,
         cli::Command::Share(c) => commands::share::run(c, json).await,
         cli::Command::Rm(c) => commands::rm::run(c, json).await,
+        cli::Command::Archive(c) => commands::archive::run(c, json).await,
         cli::Command::Devices(c) => commands::devices::run(c, json).await,
         cli::Command::Activity(c) => commands::activity::run(c).await,
         cli::Command::Comments(c) => commands::comments::run(c).await,

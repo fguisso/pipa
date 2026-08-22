@@ -7,7 +7,7 @@ mod common;
 use pipa_core::device::Scope;
 use pipa_core::page::{Access, Csp, Mode, NewPage, Zone};
 use pipa_core::user::NewUser;
-use serde_json::Value;
+use serde_json::{Value, json};
 
 use crate::common::{mint_access, spawn_test_server};
 
@@ -97,7 +97,9 @@ async fn users_are_isolated_and_local_is_superuser() {
         .expect("page bob");
 
     let a_read = mint_access(&server.state, &dev_a.id, "read:*", 300);
+    let a_admin = mint_access(&server.state, &dev_a.id, "admin:*", 300);
     let b_read = mint_access(&server.state, &dev_b.id, "read:*", 300);
+    let b_admin = mint_access(&server.state, &dev_b.id, "admin:*", 300);
     let b_destroy = mint_access(&server.state, &dev_b.id, "destroy:*", 300);
     let local_read = mint_access(&server.state, &dev_local.id, "read:*", 300);
 
@@ -151,4 +153,39 @@ async fn users_are_isolated_and_local_is_superuser() {
     assert_eq!(del.status().as_u16(), 403, "bob cannot delete alice's page");
     let err: Value = del.json().await.expect("err json");
     assert_eq!(err["error"].as_str(), Some("not_owner"));
+
+    // Archive is reversible, so it needs admin scope and ownership but no
+    // step-up. A non-member cannot archive Alice's page.
+    let denied = http
+        .post(format!("{base}/api/pages/page-alice/archive"))
+        .bearer_auth(&b_admin)
+        .json(&json!({ "archived": true }))
+        .send()
+        .await
+        .expect("archive denied");
+    assert_eq!(denied.status().as_u16(), 403, "bob cannot archive alice page");
+
+    let archived: Value = http
+        .post(format!("{base}/api/pages/page-alice/archive"))
+        .bearer_auth(&a_admin)
+        .json(&json!({ "archived": true }))
+        .send()
+        .await
+        .expect("archive")
+        .json()
+        .await
+        .expect("archive json");
+    assert_eq!(archived["archived"].as_bool(), Some(true));
+
+    let restored: Value = http
+        .post(format!("{base}/api/pages/page-alice/archive"))
+        .bearer_auth(&a_admin)
+        .json(&json!({ "archived": false }))
+        .send()
+        .await
+        .expect("restore")
+        .json()
+        .await
+        .expect("restore json");
+    assert_eq!(restored["archived"].as_bool(), Some(false));
 }

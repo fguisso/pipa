@@ -51,6 +51,8 @@ pub enum Command {
     Share(ShareArgs),
     /// Delete a page (requires step-up confirmation).
     Rm(RmArgs),
+    /// Archive a page without deleting its bundle; use --restore to republish it.
+    Archive(ArchiveArgs),
     /// List or revoke devices.
     Devices(DevicesArgs),
     /// Recent audit events.
@@ -191,6 +193,14 @@ pub struct DeployArgs {
 #[derive(Debug, Args)]
 pub struct GetArgs {
     pub uuid: String,
+}
+
+#[derive(Debug, Args)]
+pub struct ArchiveArgs {
+    pub uuid: String,
+    /// Restore an archived page to its previous serving state.
+    #[arg(long)]
+    pub restore: bool,
 }
 
 #[derive(Debug, Args)]

@@ -1,6 +1,7 @@
 //! One module per top-level CLI subcommand.
 
 pub mod activity;
+pub mod archive;
 pub mod comments;
 pub mod concepts;
 pub mod deploy;

@@ -10,6 +10,7 @@ use tower_http::limit::RequestBodyLimitLayer;
 use crate::state::AppState;
 
 mod access;
+mod archive;
 mod deploy;
 mod delete;
 mod list_get;
@@ -36,6 +37,7 @@ pub fn router(state: &AppState) -> Router<AppState> {
         .route("/api/pages/:uuid", get(list_get::get_page))
         .route("/api/pages/:uuid", delete_route(delete::delete_page))
         .route("/api/pages/:uuid/access", post(access::change_access))
+        .route("/api/pages/:uuid/archive", post(archive::set_archive))
         .route("/api/pages/:uuid/stats", get(stats::stats))
         .route("/api/pages/:uuid/transfer", post(transfer::transfer_page))
 }

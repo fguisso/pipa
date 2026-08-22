@@ -94,6 +94,23 @@ impl Client {
         parse_empty(resp).await
     }
 
+    /// Archive or restore a page. This is reversible and does not need a
+    /// step-up code; the caller still needs `admin:<uuid>` authorization.
+    pub async fn set_archive(
+        &self,
+        access: &str,
+        uuid: &str,
+        archived: bool,
+    ) -> Result<PageView, SdkError> {
+        let resp = self
+            .req(Method::POST, &format!("/api/pages/{uuid}/archive"))?
+            .bearer_auth(access)
+            .json(&serde_json::json!({ "archived": archived }))
+            .send()
+            .await?;
+        parse_json(resp).await
+    }
+
     /// Change a page's `access` (`password | noauth`) and/or `zone`
     /// (`public | private`) and/or `csp` (`strict | off`). Pass `None` for a
     /// field to leave it unchanged. `password` is consulted (and required)

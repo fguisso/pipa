@@ -195,11 +195,6 @@ pub trait AuthStore: Send + Sync {
     async fn create_admin(&self, username: &str, password_hash: &str) -> Result<Admin>;
     async fn find_admin_by_username(&self, username: &str) -> Result<Option<Admin>>;
     async fn get_admin(&self) -> Result<Option<Admin>>;
-    /// Delete the admin row + revoke its synthetic device. Used by
-    /// `pipa-server reset-claim` to allow a fresh `/setup` to create a new
-    /// admin from scratch.
-    async fn delete_admin(&self) -> Result<()>;
-
     // users (Phase 3 multi-user)
     /// Create a user AND their personal workspace + owner membership in one
     /// transaction (Phase 4). Fails with `AlreadyExists` on a duplicate username.

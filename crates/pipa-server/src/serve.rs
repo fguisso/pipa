@@ -9,7 +9,7 @@ use pipa_adapters::{
 };
 use pipa_core::{SystemClock, UlidGen};
 
-use crate::cli::{Cli, Command};
+use crate::cli::Cli;
 use crate::routes;
 use crate::state::{AppState, DynAuthStore, DynRepository, DynStorage};
 
@@ -43,23 +43,6 @@ pub async fn run(cli: Cli) -> Result<()> {
     let hmac_path = data_dir.join(".keys").join("hmac.key");
     let hmac_key = hmac_key::load_or_create(&hmac_path)
         .with_context(|| format!("loading HMAC key at {}", hmac_path.display()))?;
-
-    // Handle the one subcommand here so it can reuse the same DB connection.
-    if let Some(Command::ResetClaim) = cli.command {
-        let sessions = auth.list_owner_sessions().await?;
-        let mut revoked = 0u32;
-        for s in sessions {
-            if s.revoked_at.is_some() {
-                continue;
-            }
-            auth.revoke_owner_session(&s.id).await?;
-            revoked += 1;
-        }
-        auth.delete_admin().await?;
-        println!("[pipa] revoked {revoked} owner session(s) and removed the admin user.");
-        println!("[pipa] open /setup in your browser to create a new admin.");
-        return Ok(());
-    }
 
     let state = AppState::new(repo, auth.clone(), storage, hmac_key, config.clone());
 

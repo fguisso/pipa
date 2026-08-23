@@ -942,48 +942,6 @@ impl AuthStore for SqliteAuthStore {
         Ok(Some(admin_from_row(&row)?))
     }
 
-    async fn delete_admin(&self) -> Result<()> {
-        let now = self.clock.now();
-
-        let mut tx = self.pool.begin().await.map_err(db)?;
-
-        let row = sqlx::query("SELECT * FROM admins LIMIT 1")
-            .fetch_optional(&mut *tx)
-            .await
-            .map_err(db)?;
-        let Some(row) = row else {
-            tx.commit().await.map_err(db)?;
-            return Ok(());
-        };
-        let admin = admin_from_row(&row)?;
-
-        sqlx::query("DELETE FROM admins WHERE id = ?")
-            .bind(&admin.id)
-            .execute(&mut *tx)
-            .await
-            .map_err(db)?;
-
-        // Revoke the synthetic device + cascade-revoke its refresh tokens so
-        // any stale access tokens stop working immediately.
-        sqlx::query("UPDATE devices SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL")
-            .bind(now)
-            .bind(&admin.synthetic_device_id)
-            .execute(&mut *tx)
-            .await
-            .map_err(db)?;
-        sqlx::query(
-            "UPDATE refresh_tokens SET revoked_at = ? WHERE device_id = ? AND revoked_at IS NULL",
-        )
-        .bind(now)
-        .bind(&admin.synthetic_device_id)
-        .execute(&mut *tx)
-        .await
-        .map_err(db)?;
-
-        tx.commit().await.map_err(db)?;
-        Ok(())
-    }
-
     // users (Phase 3 multi-user)
 
     async fn create_user(&self, u: NewUser) -> Result<User> {

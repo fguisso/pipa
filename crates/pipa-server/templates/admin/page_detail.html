@@ -1,12 +1,16 @@
 {% extends "admin/base.html" %}
 
-{% block title %}page {{ uuid_short }} — admin{% endblock %}
+{% block title %}page {{ uuid_short }} | admin{% endblock %}
 
 {% block content %}
   <section x-data="pageDetail()" x-init="hydrate()" class="gpa-stack">
     <a href="{{ ui_path }}" class="gpa-link">← back to pages</a>
 
-    <h1>page <span class="gpa-mono">{{ uuid }}</span></h1>
+    <h1 x-text="page?.name || 'page details'">page details</h1>
+    <p x-show="page" class="gpa-page-id">
+      <span>page id</span>
+      <code x-text="page?.uuid"></code>
+    </p>
 
     <div x-show="error" class="gpa-error" x-text="error"></div>
     <div x-show="!page" class="gpa-muted">loading…</div>
@@ -14,7 +18,7 @@
     <template x-if="page">
       <div class="gpa-stack">
         <div class="gpa-row gpa-row--wrap">
-          <div class="gpa-stat"><span class="gpa-stat-k">name</span><span x-text="page.name || '—'"></span></div>
+          <div class="gpa-stat"><span class="gpa-stat-k">name</span><span x-text="page.name || 'untitled'"></span></div>
           <div class="gpa-stat"><span class="gpa-stat-k">mode</span><span x-text="page.mode"></span></div>
           <div class="gpa-stat"><span class="gpa-stat-k">access</span>
             <span class="gpa-pill" :class="'gpa-pill--' + page.access" x-text="page.access"></span>
@@ -31,8 +35,8 @@
           <h2>access &amp; zone</h2>
           <p class="gpa-muted">
             tighten <strong>access</strong> (set a password) directly.
-            loosening security — <strong>noauth</strong> or exposing the page to
-            the internet (<strong>zone public</strong>) — is destructive, use the CLI:
+            to loosen security by switching to <strong>noauth</strong> or exposing the page to
+            the internet (<strong>zone public</strong>), use the CLI:
           </p>
           <div class="gpa-codecopy">
             <code x-text="'pipa share ' + page.uuid + ' --zone public'"></code>
@@ -62,12 +66,12 @@
 
           <template x-if="page.comments_enabled">
             <div class="gpa-callout">
-              <strong>heads up — we modify your HTML on the fly.</strong>
+              <strong>heads up: we modify your HTML on the fly.</strong>
               while comments are on, every HTML response for this page is
               served with a <code>&lt;script&gt;</code> tag injected right
               before <code>&lt;/body&gt;</code> that loads the comments
-              widget. your deployed files on disk are <em>not</em> touched —
-              flip this checkbox off and the next request gets the original
+              widget. your deployed files on disk are <em>not</em> touched.
+              turn this checkbox off and the next request gets the original
               HTML back, byte for byte.
             </div>
           </template>
@@ -112,7 +116,7 @@
         <section class="gpa-card">
           <h2>archive</h2>
           <p class="gpa-muted">
-            archiving 404s the public URL but keeps every file on disk —
+            archiving returns 404 for the public URL but keeps every file on disk.
             unarchive later to put it back online with the same uuid.
           </p>
           <div class="gpa-row" style="margin-top:0.5rem">
@@ -146,7 +150,7 @@
       </div>
     </template>
 
-    <!-- Delete confirm modal — mirrors the dashboard wording. -->
+    <!-- Delete confirm modal mirrors the dashboard wording. -->
     <template x-if="deleteOpen && page">
       <div class="gpa-modal-overlay" @click.self="deleteOpen = false">
         <div class="gpa-modal gpa-modal--danger" role="dialog" aria-modal="true">
@@ -157,7 +161,7 @@
           </p>
           <p>
             not sure? <strong>archive</strong> takes it offline (visitors
-            see "not found") but keeps the files — you can republish in one
+            see "not found") but keeps the files. you can republish in one
             click later.
           </p>
           <code class="gpa-mono" x-text="page.uuid"></code>

@@ -17,7 +17,6 @@ use super::session::{AdminSession, ui_path};
 struct PageDetailTemplate<'a> {
     ui_path: &'a str,
     show_nav: bool,
-    uuid: &'a str,
     uuid_short: String,
     uuid_json: String,
     tokens_json: String,
@@ -40,7 +39,6 @@ pub async fn page_detail(
     let tmpl = PageDetailTemplate {
         ui_path: path,
         show_nav: true,
-        uuid: &uuid,
         uuid_short: uuid.chars().take(10).collect(),
         uuid_json: serde_json::to_string(&uuid).unwrap_or_else(|_| "\"\"".to_string()),
         tokens_json: tokens.to_json(),

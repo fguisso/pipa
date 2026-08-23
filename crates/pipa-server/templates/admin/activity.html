@@ -1,6 +1,6 @@
 {% extends "admin/base.html" %}
 
-{% block title %}activity — admin{% endblock %}
+{% block title %}activity | admin{% endblock %}
 
 {% block content %}
   <section class="gpa-stack">
@@ -28,8 +28,8 @@
               <td class="gpa-when">{{ e.ts_human }}</td>
               <td class="gpa-mono">{{ e.action }}</td>
               <td class="gpa-mono">{{ e.actor }}</td>
-              <td class="gpa-mono">{% if let Some(t) = e.target %}{{ t }}{% else %}—{% endif %}</td>
-              <td class="gpa-mono">{% if let Some(s) = e.scope %}{{ s }}{% else %}—{% endif %}</td>
+              <td class="gpa-mono">{% if let Some(t) = e.target %}{{ t }}{% else %}not available{% endif %}</td>
+              <td class="gpa-mono">{% if let Some(s) = e.scope %}{{ s }}{% else %}not available{% endif %}</td>
               <td>{% if e.success %}<span class="gpa-pill gpa-pill--ok">ok</span>{% else %}<span class="gpa-pill gpa-pill--fail">fail</span>{% endif %}</td>
               <td class="gpa-cell-details">{% if let Some(d) = e.details %}{{ d }}{% else %}{% endif %}</td>
             </tr>

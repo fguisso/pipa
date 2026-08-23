@@ -33,6 +33,9 @@ h1, h2, h3 { margin: 0 0 0.5rem; font-weight: 600; }
 h1 { font-size: 1.35rem; }
 h2 { font-size: 1.05rem; margin-top: 1.25rem; }
 h3 { font-size: 0.95rem; margin-top: 1rem; }
+.gpa-page-id { display: flex; align-items: center; gap: 0.45rem; margin: -0.25rem 0 0;
+  color: var(--text-faint); font-size: 0.78rem; }
+.gpa-page-id code { color: var(--text-muted); overflow-wrap: anywhere; }
 .gpa-header { display: flex; justify-content: space-between; align-items: center; padding: 0.6rem 1.5rem; background: var(--bg-card); border-bottom: 1px solid var(--border); min-height: 3.25rem; }
 .gpa-brand { display: inline-flex; align-items: center; gap: 0.65rem; color: var(--text); font-weight: 600; text-decoration: none; }
 .gpa-brand:hover { text-decoration: none; }
@@ -58,6 +61,7 @@ h3 { font-size: 0.95rem; margin-top: 1rem; }
 input[type=text], input[type=password] { width: 100%; padding: 0.55rem 0.7rem; background: var(--bg-soft); color: var(--text); border: 1px solid var(--border); border-radius: 6px; font-family: var(--mono); font-size: 0.9rem; }
 input[type=text]:focus, input[type=password]:focus { outline: none; border-color: var(--accent); }
 .gpa-btn { background: var(--accent); color: white; border: 0; padding: 0.5rem 0.85rem; border-radius: 6px; font-size: 0.88rem; cursor: pointer; }
+.gpa-btn--full { width: 100%; min-height: 2.5rem; margin-top: 0.5rem; }
 .gpa-btn:hover:not(:disabled) { background: var(--accent-hover); }
 .gpa-btn:disabled { opacity: 0.55; cursor: not-allowed; }
 .gpa-btn--ghost { background: transparent; color: var(--text-muted); border: 1px solid var(--border); }

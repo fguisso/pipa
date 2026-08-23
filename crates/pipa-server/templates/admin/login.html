@@ -1,6 +1,6 @@
 {% extends "admin/base.html" %}
 
-{% block title %}sign in — admin{% endblock %}
+{% block title %}sign in | admin{% endblock %}
 
 {% block content %}
   <section class="gpa-card gpa-card--narrow">
@@ -18,7 +18,7 @@
       <input type="password" id="password" name="password"
              autocomplete="current-password" required />
 
-      <button type="submit">sign in</button>
+      <button type="submit" class="gpa-btn gpa-btn--full">sign in</button>
       {% if let Some(e) = error %}
         <div class="gpa-error">{{ e }}</div>
       {% endif %}

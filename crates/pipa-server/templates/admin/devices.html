@@ -1,6 +1,6 @@
 {% extends "admin/base.html" %}
 
-{% block title %}devices — admin{% endblock %}
+{% block title %}devices | admin{% endblock %}
 
 {% block content %}
   {% include "partials/icons.html" %}
@@ -34,7 +34,7 @@
             <td x-text="d.label"></td>
             <td x-text="d.scope"></td>
             <td x-text="gpa.fmtTime(d.created_at)"></td>
-            <td x-text="d.last_seen_at ? gpa.fmtTime(d.last_seen_at) : '—'"></td>
+            <td x-text="d.last_seen_at ? gpa.fmtTime(d.last_seen_at) : 'not available'"></td>
             <td>
               <span class="gpa-pill"
                     :class="d.revoked_at ? 'gpa-pill--revoked' : 'gpa-pill--active'"
@@ -68,7 +68,7 @@
             <code>pipa login</code> again.
           </p>
           <p x-show="isSelf(revokeTarget.id)" class="gpa-error">
-            you're revoking <strong>this browser's session</strong> — you'll
+            you're revoking <strong>this browser's session</strong>. you'll
             be signed out immediately and bounced to the login screen.
           </p>
           <code class="gpa-mono" x-text="revokeTarget.id"></code>

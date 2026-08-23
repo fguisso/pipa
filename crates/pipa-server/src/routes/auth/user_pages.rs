@@ -17,7 +17,6 @@ use pipa_core::audit::{AuditAction, AuditEvent};
 use pipa_core::user::NewUser;
 use serde::Deserialize;
 
-use crate::auth::owner_cookie::safe_next;
 use crate::auth::user_cookie::{set_cookie_header, sign_cookie};
 use crate::state::AppState;
 
@@ -246,10 +245,20 @@ async fn finish_session(
 
     let cookie_value = sign_cookie(&state.hmac_key, &session.id);
     let cookie_header = set_cookie_header(&cookie_value, state.config.server.dev);
-    let target = safe_next(next);
+    let target = user_landing(next);
     let mut resp = Redirect::to(&target).into_response();
     resp.headers_mut().insert(header::SET_COOKIE, cookie_header);
     resp
+}
+
+/// Users do not belong in the server-admin dashboard. Preserve a valid
+/// destination from the request, but make the personal workspace their
+/// landing page when no destination was supplied (or it was unsafe).
+fn user_landing(next: Option<&str>) -> String {
+    match next {
+        Some(path) if path.starts_with('/') && !path.starts_with("//") => path.to_string(),
+        _ => "/workspaces".to_string(),
+    }
 }
 
 fn render<T: Template>(t: T) -> Response {
@@ -271,4 +280,22 @@ fn unix_now() -> i64 {
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_secs() as i64)
         .unwrap_or(0)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::user_landing;
+
+    #[test]
+    fn user_landing_defaults_to_workspaces() {
+        assert_eq!(user_landing(None), "/workspaces");
+        assert_eq!(user_landing(Some("https://example.com")), "/workspaces");
+        assert_eq!(user_landing(Some("//example.com")), "/workspaces");
+    }
+
+    #[test]
+    fn user_landing_preserves_a_safe_destination() {
+        assert_eq!(user_landing(Some("/workspaces")), "/workspaces");
+        assert_eq!(user_landing(Some("/cli?code=abc")), "/cli?code=abc");
+    }
 }

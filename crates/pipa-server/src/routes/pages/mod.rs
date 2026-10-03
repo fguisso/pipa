@@ -4,6 +4,7 @@
 //! SECURITY.md §3.
 
 use axum::Router;
+use axum::extract::DefaultBodyLimit;
 use axum::routing::{delete as delete_route, get, post};
 use tower_http::limit::RequestBodyLimitLayer;
 
@@ -27,8 +28,12 @@ pub fn router(state: &AppState) -> Router<AppState> {
     let upload_limit =
         state.config.hosting.max_upload_bytes as usize + BODY_LIMIT_HEADROOM_BYTES;
 
+    // `Multipart` applies axum's own 2 MiB default body limit unless the
+    // route overrides it, which would silently cap deploys well below
+    // `max_upload_bytes`. Align it with the configured limit.
     let deploy_only = Router::new()
         .route("/api/pages", post(deploy::deploy))
+        .layer(DefaultBodyLimit::max(upload_limit))
         .layer(RequestBodyLimitLayer::new(upload_limit));
 
     Router::new()

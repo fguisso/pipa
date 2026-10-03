@@ -355,6 +355,23 @@ pub async fn deploy(
     }))
 }
 
+/// `MultipartError`'s Display is a fixed string, so a body-limit hit has to be
+/// recognized from its status or from the "length limit exceeded" error deeper
+/// in the source chain (the shape depends on which limit layer tripped).
+fn is_length_limit(e: &axum::extract::multipart::MultipartError) -> bool {
+    if e.status() == axum::http::StatusCode::PAYLOAD_TOO_LARGE {
+        return true;
+    }
+    let mut source = std::error::Error::source(e);
+    while let Some(err) = source {
+        if err.to_string().contains("length limit") {
+            return true;
+        }
+        source = err.source();
+    }
+    false
+}
+
 async fn read_form(mut multipart: Multipart, max_archive: u64) -> Result<Form, ApiError> {
     let mut form = Form::default();
     while let Some(field) = multipart
@@ -366,7 +383,7 @@ async fn read_form(mut multipart: Multipart, max_archive: u64) -> Result<Form, A
         match name.as_str() {
             "archive" => {
                 let bytes = field.bytes().await.map_err(|e| {
-                    if format!("{e}").contains("length limit") {
+                    if is_length_limit(&e) {
                         ApiError::new(
                             axum::http::StatusCode::PAYLOAD_TOO_LARGE,
                             "archive_too_large",
